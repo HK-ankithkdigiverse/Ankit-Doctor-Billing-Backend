@@ -21,7 +21,9 @@ export const connectDatabase = async (): Promise<typeof mongoose> => {
 
   connectionPromise = mongoose
     .connect(dbUrl, {
-      serverSelectionTimeoutMS: 10000,
+      serverSelectionTimeoutMS: 30000,
+      connectTimeoutMS: 30000,
+      socketTimeoutMS: 45000,
     })
     .then(async (conn) => {
       console.log("Database successfully connected");
