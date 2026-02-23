@@ -2,9 +2,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { Request, Response, NextFunction } from "express";
-
-// Upload directory
-const uploadDir = path.join(process.cwd(), "uploads");
+import { uploadDir } from "../config/uploadPath";
 
 // Create uploads folder if it doesn't exist
 if (!fs.existsSync(uploadDir)) {
