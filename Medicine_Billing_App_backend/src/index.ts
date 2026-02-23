@@ -2,7 +2,7 @@
 import express from 'express';  
 import http from 'http';
 import cors from 'cors'
-import { mongooseConnection} from './database'
+import { connectDatabase } from './database'
 import dotenv from "dotenv"
 import apiRoutes from "./routes";
 import cookieParser from "cookie-parser"
@@ -21,8 +21,19 @@ app.use(cookieParser())
 app.use(express.json()) 
 app.use(express.urlencoded({ extended: true })) 
 
-mongooseConnection
-
+app.use("/api", async (_req, res, next) => {
+  try {
+    await connectDatabase();
+    next();
+  } catch (error) {
+    console.error("DB CONNECTION ERROR:", error);
+    return res.status(500).json({
+      status: 500,
+      message: "Database connection failed",
+      data: null,
+    });
+  }
+});
 app.use("/api", apiRoutes);
 app.use("/uploads", express.static(uploadDir));
 
