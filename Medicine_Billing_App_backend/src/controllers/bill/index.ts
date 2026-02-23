@@ -10,6 +10,9 @@ interface AuthRequest extends Request {
   user?: any;
 }
 
+const getSingleParam = (value: string | string[] | undefined) =>
+  Array.isArray(value) ? value[0] : value;
+
 export const createBill = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user?._id) {
@@ -205,8 +208,13 @@ export const getAllBills = async (req: AuthRequest, res: Response) => {
 
 export const getBillById = async (req: AuthRequest, res: Response) => {
   try {
+    const id = getSingleParam(req.params.id);
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid bill id" });
+    }
+
     const bill = await BillModel.findOne({
-      _id: req.params.id,
+      _id: id,
       isDeleted: false,
     })
       .populate("companyId", "name companyName gstNumber logo address phone email state")
@@ -235,7 +243,12 @@ export const getBillById = async (req: AuthRequest, res: Response) => {
 
 export const deleteBill = async (req: AuthRequest, res: Response) => {
   try {
-    const bill = await BillModel.findById(req.params.id);
+    const id = getSingleParam(req.params.id);
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid bill id" });
+    }
+
+    const bill = await BillModel.findById(id);
     if (!bill) return res.status(404).json({ message: responseMessage.invoiceNotFound });
 
     const isAdmin = req.user?.role === "ADMIN";
@@ -255,8 +268,13 @@ export const deleteBill = async (req: AuthRequest, res: Response) => {
 
 export const updateBill = async (req: AuthRequest, res: Response) => {
   try {
+    const id = getSingleParam(req.params.id);
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid bill id" });
+    }
+
     const bill = await BillModel.findOne({
-      _id: req.params.id,
+      _id: id,
       isDeleted: false,
     });
 

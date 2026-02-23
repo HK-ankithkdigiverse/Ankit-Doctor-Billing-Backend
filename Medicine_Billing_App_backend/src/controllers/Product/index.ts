@@ -159,7 +159,14 @@ export const getProducts = async (req: AuthRequest, res: Response) => {
 /* ================= UPDATE PRODUCT ================= */
 export const updateProduct = async (req: AuthRequest, res: Response) => {
   try {
-    const product = await Product.findById(req.params.id);
+    const id = getSingleParam(req.params.id);
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(StatusCode.BAD_REQUEST).json({
+        message: "Invalid product id",
+      });
+    }
+
+    const product = await Product.findById(id);
 
     if (!product || product.isDeleted) {
       return res.status(StatusCode.NOT_FOUND).json({
@@ -200,7 +207,14 @@ export const updateProduct = async (req: AuthRequest, res: Response) => {
 /* ================= SOFT DELETE PRODUCT ================= */
 export const deleteProduct = async (req: AuthRequest, res: Response) => {
   try {
-    const product = await Product.findById(req.params.id);
+    const id = getSingleParam(req.params.id);
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(StatusCode.BAD_REQUEST).json({
+        message: "Invalid product id",
+      });
+    }
+
+    const product = await Product.findById(id);
 
     if (!product || product.isDeleted) {
       return res.status(StatusCode.NOT_FOUND).json({

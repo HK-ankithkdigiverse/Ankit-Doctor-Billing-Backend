@@ -9,6 +9,8 @@ import bcrypt from "bcryptjs";
 import {AuthRequest} from "../../middleware/auth"
 import { ROLE } from "../../common";
 
+const normalizeEmail = (email: string) => email.toLowerCase().trim();
+
 
 
 // ADMIN → CREATE USER
@@ -30,9 +32,9 @@ export const adminCreateUser = async (req: AuthRequest, res: Response) => {
     }
 
     // Normalize email
-    const normalizedEmail = email.toLowerCase().trim();
+    const normalizedEmail = normalizeEmail(email);
 
-    const existingUser = await User.findOne({ email: normalizedEmail });
+    const existingUser = await User.findOne({ email: normalizedEmail, isDeleted: false });
     if (existingUser) {
       return res
         .status(StatusCode.BAD_REQUEST)
@@ -68,8 +70,9 @@ export const adminCreateUser = async (req: AuthRequest, res: Response) => {
 export const login = async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
+    const normalizedEmail = normalizeEmail(email);
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email: normalizedEmail, isDeleted: false });
     if (!user) {
       return res.status(StatusCode.BAD_REQUEST).json({
         ...ApiResponse.error(
@@ -93,9 +96,9 @@ export const login = async (req: Request, res: Response) => {
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-    await Otp.deleteMany({ email });
+    await Otp.deleteMany({ email: normalizedEmail });
     await Otp.create({
-      email,
+      email: normalizedEmail,
       otp,
       expireAt: new Date(Date.now() + 5 * 60 * 1000),
     });
@@ -116,7 +119,7 @@ export const login = async (req: Request, res: Response) => {
 export const verifyOtp = async (req: Request, res: Response) => {
   try {
     const { email, otp } = req.body;
-    const normalizedEmail = email.toLowerCase().trim();
+    const normalizedEmail = normalizeEmail(email);
 
     const otpRecord = await Otp.findOne({ email: normalizedEmail, otp });
     if (!otpRecord || otpRecord.expireAt < new Date()) {
@@ -127,7 +130,7 @@ export const verifyOtp = async (req: Request, res: Response) => {
 
     await Otp.deleteMany({ email: normalizedEmail });
 
-    const user = await User.findOne({ email: normalizedEmail });
+    const user = await User.findOne({ email: normalizedEmail, isDeleted: false });
     if (!user) {
       return res
         .status(StatusCode.BAD_REQUEST)
@@ -159,10 +162,16 @@ export const verifyOtp = async (req: Request, res: Response) => {
 
 export const changePassword = async (req: AuthRequest, res: Response) => {
   try {
+    if (!req.user?._id) {
+      return res
+        .status(StatusCode.UNAUTHORIZED)
+        .json(ApiResponse.error(responseMessage.accessDenied, null, StatusCode.UNAUTHORIZED));
+    }
+
     const userId = req.user._id;
     const { oldPassword, newPassword } = req.body;
 
-    const user = await User.findById(userId);
+    const user = await User.findOne({ _id: userId, isDeleted: false });
     if (!user) {
       return res
         .status(StatusCode.NOT_FOUND)
@@ -192,8 +201,9 @@ export const changePassword = async (req: AuthRequest, res: Response) => {
 export const forgotPassword = async (req: Request, res: Response) => {
   try {
     const { email } = req.body;
+    const normalizedEmail = normalizeEmail(email);
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email: normalizedEmail, isDeleted: false });
     if (!user) {
       return res
         .status(StatusCode.NOT_FOUND)
@@ -202,14 +212,14 @@ export const forgotPassword = async (req: Request, res: Response) => {
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-    await Otp.deleteMany({ email });
+    await Otp.deleteMany({ email: normalizedEmail });
     await Otp.create({
-      email,
+      email: normalizedEmail,
       otp,
       expireAt: new Date(Date.now() + 5 * 60 * 1000),
     });
 
-    email_verification_mail(email, otp);
+    await email_verification_mail(normalizedEmail, otp);
 
     return res.status(StatusCode.OK).json(ApiResponse.success(responseMessage.loginSuccess));
   } catch (error) {
@@ -222,8 +232,9 @@ export const forgotPassword = async (req: Request, res: Response) => {
 export const resetPassword = async (req: Request, res: Response) => {
   try {
     const { email, otp, newPassword } = req.body;
+    const normalizedEmail = normalizeEmail(email);
 
-    const otpRecord = await Otp.findOne({ email, otp });
+    const otpRecord = await Otp.findOne({ email: normalizedEmail, otp });
     if (!otpRecord || otpRecord.expireAt < new Date()) {
       return res
         .status(StatusCode.BAD_REQUEST)
@@ -233,11 +244,11 @@ export const resetPassword = async (req: Request, res: Response) => {
     const hashedPassword = await bcrypt.hash(newPassword, 12);
 
     await User.findOneAndUpdate(
-      { email },
+      { email: normalizedEmail, isDeleted: false },
       { password: hashedPassword }
     );
 
-    await Otp.deleteMany({ email });
+    await Otp.deleteMany({ email: normalizedEmail });
 
     return res.status(StatusCode.OK).json(ApiResponse.success(responseMessage.updateDataSuccess("Password")));
   } catch (error) {
@@ -254,6 +265,12 @@ export const logout = (_req: Request, res: Response) => {
 
 /* ================= GET ME ================= */
 export const getMe = (req: AuthRequest, res: Response) => {
+  if (!req.user?._id) {
+    return res
+      .status(StatusCode.UNAUTHORIZED)
+      .json(ApiResponse.error(responseMessage.accessDenied, null, StatusCode.UNAUTHORIZED));
+  }
+
   return res
     .status(StatusCode.OK)
     .json(ApiResponse.success("Profile fetched", { _id: req.user._id, role: req.user.role }));

@@ -3,6 +3,10 @@ import { CompanyModel } from "../../database/models/company";
 import { responseMessage } from "../../helper";
 import { ApiResponse, ROLE, StatusCode } from "../../common";
 import { AuthRequest } from "../../middleware/auth";
+import mongoose from "mongoose";
+
+const getSingleParam = (value: string | string[] | undefined) =>
+  Array.isArray(value) ? value[0] : value;
 
 // ================= CREATE =================
 export const createCompany = async (
@@ -109,7 +113,7 @@ export const getAllCompanies = async (
 
 
 // ================= GET SINGLE =================
-export const getSingleCompany = async (req: any, res: Response) => {
+export const getSingleCompany = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
       return res.status(StatusCode.UNAUTHORIZED).json({
@@ -117,7 +121,12 @@ export const getSingleCompany = async (req: any, res: Response) => {
       });
     }
 
-    const { id } = req.params;
+    const id = getSingleParam(req.params.id);
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(StatusCode.BAD_REQUEST).json({
+        message: "Invalid company id",
+      });
+    }
     const isAdmin = req.user.role === ROLE.ADMIN;
 
     const filter: any = { _id: id, isDeleted: false };
@@ -148,7 +157,20 @@ export const getSingleCompany = async (req: any, res: Response) => {
 // ================= UPDATE =================
 export const updateCompany = async (req: AuthRequest, res: Response) => {
   try {
-    const company = await CompanyModel.findById(req.params.id);
+    const id = getSingleParam(req.params.id);
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(StatusCode.BAD_REQUEST).json({
+        message: "Invalid company id",
+      });
+    }
+
+    if (!req.user) {
+      return res.status(StatusCode.UNAUTHORIZED).json({
+        message: responseMessage.accessDenied,
+      });
+    }
+
+    const company = await CompanyModel.findById(id);
 
     if (!company) {
       return res.status(404).json({ message: responseMessage.getDataNotFound("Company") });
@@ -156,7 +178,7 @@ export const updateCompany = async (req: AuthRequest, res: Response) => {
 
     if (
       req.user?.role !== ROLE.ADMIN &&
-      company.userId.toString() !== req.user?._id
+      company.userId.toString() !== req.user._id
     ) {
       return res.status(403).json({ message: responseMessage.accessDenied });
     }
@@ -195,7 +217,7 @@ export const updateCompany = async (req: AuthRequest, res: Response) => {
 
 
 // ================= DELETE (SOFT DELETE) =================
-export const deleteCompany = async (req: any, res: Response) => {
+export const deleteCompany = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
       return res.status(StatusCode.UNAUTHORIZED).json({
@@ -203,7 +225,12 @@ export const deleteCompany = async (req: any, res: Response) => {
       });
     }
 
-    const { id } = req.params;
+    const id = getSingleParam(req.params.id);
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(StatusCode.BAD_REQUEST).json({
+        message: "Invalid company id",
+      });
+    }
     const isAdmin = req.user.role === ROLE.ADMIN;
 
     const filter: any = { _id: id, isDeleted: false };
