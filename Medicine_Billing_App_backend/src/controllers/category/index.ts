@@ -140,9 +140,9 @@ export const getCategories = async (req: AuthRequest, res: Response) => {
 /* ================= GET CATEGORY BY ID ================= */
 export const getCategoryById = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
       return res.status(StatusCode.BAD_REQUEST).json({
         message: "Invalid category id",
       });
@@ -176,10 +176,10 @@ export const getCategoryById = async (req: AuthRequest, res: Response) => {
 /* ================= UPDATE CATEGORY ================= */
 export const updateCategory = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     const { name, description } = req.body;
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
       return res.status(StatusCode.BAD_REQUEST).json({
         message: "Invalid category id",
       });
@@ -247,9 +247,9 @@ export const updateCategory = async (req: AuthRequest, res: Response) => {
 /* ================= DELETE CATEGORY ================= */
 export const deleteCategory = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
       return res.status(StatusCode.BAD_REQUEST).json({
         message: "Invalid category id",
       });
