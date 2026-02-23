@@ -8,15 +8,29 @@ if (!dbUrl) {
     throw new Error("DB_URL is missing. Set it in environment variables.");
 }
 
-const mongooseConnection = mongoose
-    .connect(dbUrl)
-    .then(async () => {
-        console.log('Database successfully connected');
-        await ensureCategoryCollectionIndexes();
-    })
-    .catch((err) => {
-        console.error('Database connection failed:', err);
-        throw err;
-    });
+let mongooseConnection: Promise<typeof mongoose> | null = null;
 
-export { mongooseConnection }
+const connectToDatabase = async () => {
+    if (mongoose.connection.readyState === 1) {
+        return mongoose;
+    }
+
+    if (!mongooseConnection) {
+        mongooseConnection = mongoose
+            .connect(dbUrl)
+            .then(async (connection) => {
+                console.log('Database successfully connected');
+                await ensureCategoryCollectionIndexes();
+                return connection;
+            })
+            .catch((err) => {
+                mongooseConnection = null;
+                console.error('Database connection failed:', err);
+                throw err;
+            });
+    }
+
+    return mongooseConnection;
+};
+
+export { mongooseConnection, connectToDatabase }
