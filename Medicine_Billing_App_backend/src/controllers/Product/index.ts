@@ -5,9 +5,6 @@ import { ApiResponse, StatusCode } from "../../common";
 import { AuthRequest } from "../../middleware/auth";
 import mongoose from "mongoose";
 
-const getSingleParam = (value: string | string[] | undefined) =>
-  Array.isArray(value) ? value[0] : value;
-
 /* ================= CREATE PRODUCT ================= */
 export const createProduct = async (req: AuthRequest, res: Response) => {
   try {
@@ -45,13 +42,7 @@ export const createProduct = async (req: AuthRequest, res: Response) => {
 /* ================= GET SINGLE PRODUCT ================= */
 export const getProductById = async (req: AuthRequest, res: Response) => {
   try {
-    const id = getSingleParam(req.params.id);
-
-    if (!id) {
-      return res.status(StatusCode.BAD_REQUEST).json({
-        message: "Product id is required",
-      });
-    }
+    const { id } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(StatusCode.BAD_REQUEST).json({
@@ -159,14 +150,7 @@ export const getProducts = async (req: AuthRequest, res: Response) => {
 /* ================= UPDATE PRODUCT ================= */
 export const updateProduct = async (req: AuthRequest, res: Response) => {
   try {
-    const id = getSingleParam(req.params.id);
-    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(StatusCode.BAD_REQUEST).json({
-        message: "Invalid product id",
-      });
-    }
-
-    const product = await Product.findById(id);
+    const product = await Product.findById(req.params.id);
 
     if (!product || product.isDeleted) {
       return res.status(StatusCode.NOT_FOUND).json({
@@ -207,14 +191,7 @@ export const updateProduct = async (req: AuthRequest, res: Response) => {
 /* ================= SOFT DELETE PRODUCT ================= */
 export const deleteProduct = async (req: AuthRequest, res: Response) => {
   try {
-    const id = getSingleParam(req.params.id);
-    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(StatusCode.BAD_REQUEST).json({
-        message: "Invalid product id",
-      });
-    }
-
-    const product = await Product.findById(id);
+    const product = await Product.findById(req.params.id);
 
     if (!product || product.isDeleted) {
       return res.status(StatusCode.NOT_FOUND).json({

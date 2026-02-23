@@ -6,8 +6,6 @@ import { StatusCode } from "../../common";
 import { AuthRequest } from "../../middleware/auth";
 
 const normalizeCategoryName = (name: string) => name.trim().toLowerCase();
-const getSingleParam = (value: string | string[] | undefined) =>
-  Array.isArray(value) ? value[0] : value;
 
 const normalizeCategoryDescription = (description: unknown) =>
   typeof description === "string" ? description.trim() : "";
@@ -142,13 +140,7 @@ export const getCategories = async (req: AuthRequest, res: Response) => {
 /* ================= GET CATEGORY BY ID ================= */
 export const getCategoryById = async (req: AuthRequest, res: Response) => {
   try {
-    const id = getSingleParam(req.params.id);
-
-    if (!id) {
-      return res.status(StatusCode.BAD_REQUEST).json({
-        message: "Category id is required",
-      });
-    }
+    const { id } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(StatusCode.BAD_REQUEST).json({
@@ -184,14 +176,8 @@ export const getCategoryById = async (req: AuthRequest, res: Response) => {
 /* ================= UPDATE CATEGORY ================= */
 export const updateCategory = async (req: AuthRequest, res: Response) => {
   try {
-    const id = getSingleParam(req.params.id);
+    const { id } = req.params;
     const { name, description } = req.body;
-
-    if (!id) {
-      return res.status(StatusCode.BAD_REQUEST).json({
-        message: "Category id is required",
-      });
-    }
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(StatusCode.BAD_REQUEST).json({
@@ -261,13 +247,7 @@ export const updateCategory = async (req: AuthRequest, res: Response) => {
 /* ================= DELETE CATEGORY ================= */
 export const deleteCategory = async (req: AuthRequest, res: Response) => {
   try {
-    const id = getSingleParam(req.params.id);
-
-    if (!id) {
-      return res.status(StatusCode.BAD_REQUEST).json({
-        message: "Category id is required",
-      });
-    }
+    const { id } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(StatusCode.BAD_REQUEST).json({

@@ -5,16 +5,8 @@ export interface AuthPayload {
   role?: string;
 }
 
-const getJwtSecret = (): string => {
-  const secret = process.env.JWT_TOKEN_SECRET;
-  if (!secret) {
-    throw new Error("JWT_TOKEN_SECRET is missing");
-  }
-  return secret;
-};
-
 export const generateToken = (payload: AuthPayload): string => {
-  return jwt.sign(payload, getJwtSecret(), {
+  return jwt.sign(payload, process.env.JWT_TOKEN_SECRET as string, {
     expiresIn: "1d",
   });
 };
@@ -22,6 +14,6 @@ export const generateToken = (payload: AuthPayload): string => {
 export const verifyToken = (token: string): AuthPayload & JwtPayload => {
   return jwt.verify(
     token,
-    getJwtSecret()
+    process.env.JWT_TOKEN_SECRET as string
   ) as AuthPayload & JwtPayload;
 };

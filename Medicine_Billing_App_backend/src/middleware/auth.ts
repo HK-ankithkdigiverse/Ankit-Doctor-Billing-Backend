@@ -15,13 +15,6 @@ export const authMiddleware = (
   res: Response,
   next: NextFunction
 ) => {
-  const jwtSecret = process.env.JWT_TOKEN_SECRET;
-  if (!jwtSecret) {
-    return res
-      .status(StatusCode.INTERNAL_ERROR)
-      .json(ApiResponse.error("JWT secret is missing", null, StatusCode.INTERNAL_ERROR));
-  }
-
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -31,16 +24,11 @@ export const authMiddleware = (
   }
 
   const token = authHeader.split(" ")[1];
-  if (!token) {
-    return res
-      .status(StatusCode.UNAUTHORIZED)
-      .json(ApiResponse.error(responseMessage.invalidToken, null, StatusCode.UNAUTHORIZED));
-  }
 
   try {
     const decoded = jwt.verify(
       token,
-      jwtSecret
+      process.env.JWT_TOKEN_SECRET as string
     ) as {
       _id: string;
       role: string;
