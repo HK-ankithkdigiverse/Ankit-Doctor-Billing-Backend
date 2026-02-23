@@ -1,6 +1,5 @@
 
-import express from 'express';  
-import http from 'http';
+import express from 'express';
 import cors from 'cors'
 import { mongooseConnection} from './database'
 import dotenv from "dotenv"
@@ -25,7 +24,7 @@ mongooseConnection
 app.use("/api", apiRoutes);
 app.use("/uploads", express.static("uploads"));
 
-app.use("/",(req, res, next) => {
+app.get("/",(req, res) => {
   res.status(200).send("Welcome to the Medicine Billing App Backend");
 });
 
@@ -39,9 +38,4 @@ app.use((req, res, next) => {
 app.get('/isServerUp', (req, res) => {
     res.send('Server is running ');
 });
-
-
-
-
-let server = new http.Server(app);
-export default server;
+export default app;
