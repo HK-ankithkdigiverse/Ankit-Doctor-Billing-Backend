@@ -5,6 +5,9 @@ import { ApiResponse, StatusCode } from "../../common";
 import { AuthRequest } from "../../middleware/auth";
 import mongoose from "mongoose";
 
+const getSingleParam = (value: string | string[] | undefined) =>
+  Array.isArray(value) ? value[0] : value;
+
 /* ================= CREATE PRODUCT ================= */
 export const createProduct = async (req: AuthRequest, res: Response) => {
   try {
@@ -42,7 +45,13 @@ export const createProduct = async (req: AuthRequest, res: Response) => {
 /* ================= GET SINGLE PRODUCT ================= */
 export const getProductById = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = getSingleParam(req.params.id);
+
+    if (!id) {
+      return res.status(StatusCode.BAD_REQUEST).json({
+        message: "Product id is required",
+      });
+    }
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(StatusCode.BAD_REQUEST).json({
