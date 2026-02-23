@@ -1,36 +1,36 @@
 import mongoose from 'mongoose';
+import 'dotenv/config';
 import { ensureCategoryCollectionIndexes } from '../models/category';
-const dbUrl = process.env.DB_URL as string;
 
-mongoose.set('strictQuery', false)
+const DB_URL = process.env.DB_URL;
 
-if (!dbUrl) {
-    throw new Error("DB_URL is missing. Set it in environment variables.");
+if (!DB_URL) {
+  throw new Error('DB_URL missing');
 }
 
-let mongooseConnection: Promise<typeof mongoose> | null = null;
+mongoose.set('strictQuery', false);
 
-const connectToDatabase = async () => {
-    if (mongoose.connection.readyState === 1) {
-        return mongoose;
-    }
+let cachedConnection: Promise<typeof mongoose> | null = null;
 
-    if (!mongooseConnection) {
-        mongooseConnection = mongoose
-            .connect(dbUrl)
-            .then(async (connection) => {
-                console.log('Database successfully connected');
-                await ensureCategoryCollectionIndexes();
-                return connection;
-            })
-            .catch((err) => {
-                mongooseConnection = null;
-                console.error('Database connection failed:', err);
-                throw err;
-            });
-    }
+export const connectDB = async () => {
+  if (mongoose.connection.readyState === 1) {
+    return mongoose;
+  }
 
-    return mongooseConnection;
+  if (!cachedConnection) {
+    cachedConnection = mongoose
+      .connect(DB_URL, { serverSelectionTimeoutMS: 10000 })
+      .then(async (connection) => {
+        await ensureCategoryCollectionIndexes();
+        console.log('MongoDB connected');
+        return connection;
+      })
+      .catch((err) => {
+        cachedConnection = null;
+        console.error('MongoDB error:', err);
+        throw err;
+      });
+  }
+
+  return cachedConnection;
 };
-
-export { mongooseConnection, connectToDatabase }

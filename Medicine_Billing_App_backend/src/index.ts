@@ -1,7 +1,7 @@
 
 import express from 'express';
 import cors from 'cors'
-import { connectToDatabase } from './database'
+import { connectDB } from './database'
 import dotenv from "dotenv"
 import apiRoutes from "./routes";
 import cookieParser from "cookie-parser"
@@ -22,7 +22,7 @@ app.use(express.urlencoded({ extended: true }))
 
 app.use("/api", async (req, res, next) => {
   try {
-    await connectToDatabase();
+    await connectDB();
     next();
   } catch (error: any) {
     res.status(500).json({
