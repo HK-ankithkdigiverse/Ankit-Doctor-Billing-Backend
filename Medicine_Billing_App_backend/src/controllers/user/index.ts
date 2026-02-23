@@ -8,6 +8,12 @@ import { responseMessage } from "../../helper";
 // GET PROFILE (USER + ADMIN)
 export const getProfile = async (req: AuthRequest, res: Response) => {
   try {
+    if (!req.user?._id) {
+      return res
+        .status(StatusCode.UNAUTHORIZED)
+        .json(ApiResponse.error(responseMessage.accessDenied, null, StatusCode.UNAUTHORIZED));
+    }
+
     const userId = req.user._id;
 
     const user = await User.findById(userId).select("-password");
@@ -29,6 +35,12 @@ export const getProfile = async (req: AuthRequest, res: Response) => {
 // UPDATE OWN PROFILE
 export const updateUser = async (req: AuthRequest, res: Response) => {
   try {
+    if (!req.user?._id) {
+      return res
+        .status(StatusCode.UNAUTHORIZED)
+        .json(ApiResponse.error(responseMessage.accessDenied, null, StatusCode.UNAUTHORIZED));
+    }
+
     const userId = req.user._id;
     const { name, email, phone, address } = req.body;
 
@@ -57,6 +69,12 @@ export const updateUser = async (req: AuthRequest, res: Response) => {
 // DELETE OWN ACCOUNT
 export const deleteUser = async (req: AuthRequest, res: Response) => {
   try {
+    if (!req.user?._id) {
+      return res
+        .status(StatusCode.UNAUTHORIZED)
+        .json(ApiResponse.error(responseMessage.accessDenied, null, StatusCode.UNAUTHORIZED));
+    }
+
     const userId = req.user._id;
 
     const user = await User.findByIdAndUpdate(
