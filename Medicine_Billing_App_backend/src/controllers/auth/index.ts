@@ -68,9 +68,20 @@ export const adminCreateUser = async (req: AuthRequest, res: Response) => {
 export const login = async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
+    const normalizedEmail = typeof email === "string" ? email.toLowerCase().trim() : "";
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email: normalizedEmail });
     if (!user) {
+      return res.status(StatusCode.BAD_REQUEST).json({
+        ...ApiResponse.error(
+          responseMessage.invalidUserPasswordEmail,
+          null,
+          StatusCode.BAD_REQUEST
+        ),
+      });
+    }
+
+    if (typeof password !== "string" || !user.password) {
       return res.status(StatusCode.BAD_REQUEST).json({
         ...ApiResponse.error(
           responseMessage.invalidUserPasswordEmail,
@@ -93,9 +104,9 @@ export const login = async (req: Request, res: Response) => {
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-    await Otp.deleteMany({ email });
+    await Otp.deleteMany({ email: normalizedEmail });
     await Otp.create({
-      email,
+      email: normalizedEmail,
       otp,
       expireAt: new Date(Date.now() + 5 * 60 * 1000),
     });
@@ -105,10 +116,11 @@ export const login = async (req: Request, res: Response) => {
 
     return res.status(StatusCode.OK).json(ApiResponse.success(responseMessage.loginSuccess));
   } catch (error) {
-    console.error(error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    console.error("LOGIN ERROR:", error);
     return res
       .status(StatusCode.INTERNAL_ERROR)
-      .json(ApiResponse.error(responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR));
+      .json(ApiResponse.error(responseMessage.internalServerError, { message: errorMessage }, StatusCode.INTERNAL_ERROR));
   }
 };
 
