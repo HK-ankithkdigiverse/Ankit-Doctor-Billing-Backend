@@ -8,6 +8,7 @@ export interface IAuth extends Document {
   phone: string;
   address: string;
   role: ROLE;
+  isActive: boolean;
   isDeleted: boolean;
 }
 
@@ -41,6 +42,10 @@ const userSchema = new mongoose.Schema<IAuth>(
       type: String,
       enum: Object.values(ROLE),
       default: ROLE.USER,
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
     },
     isDeleted: {
       type: Boolean,

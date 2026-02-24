@@ -16,6 +16,7 @@ interface AdminCreateUserBody {
   phone?: string;
   address?: string;
   role?: ROLE;
+  isActive?: boolean;
 }
 
 interface LoginBody {
@@ -48,7 +49,7 @@ interface ResetPasswordBody {
 // ADMIN → CREATE USER
 export const adminCreateUser = async (req: AuthRequest, res: Response) => {
   try {
-    const { name, email, password, phone, address, role } = req.body as AdminCreateUserBody;
+    const { name, email, password, phone, address, role, isActive } = req.body as AdminCreateUserBody;
 
     // Validate required fields
     if (!name || !email || !password) {
@@ -82,6 +83,7 @@ export const adminCreateUser = async (req: AuthRequest, res: Response) => {
       phone,
       address,
       role: role || ROLE.USER,
+      isActive: typeof isActive === "boolean" ? isActive : true,
     });
 
     // Return user without password
@@ -113,6 +115,12 @@ export const login = async (req: Request, res: Response) => {
           StatusCode.BAD_REQUEST
         ),
       });
+    }
+
+    if (user.isActive === false) {
+      return res
+        .status(StatusCode.FORBIDDEN)
+        .json(ApiResponse.error(responseMessage.accountInactive, null, StatusCode.FORBIDDEN));
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
@@ -167,6 +175,12 @@ export const verifyOtp = async (req: Request, res: Response) => {
       return res
         .status(StatusCode.BAD_REQUEST)
         .json(ApiResponse.error(responseMessage.getDataNotFound("User"), null, StatusCode.BAD_REQUEST));
+    }
+
+    if (user.isActive === false) {
+      return res
+        .status(StatusCode.FORBIDDEN)
+        .json(ApiResponse.error(responseMessage.accountInactive, null, StatusCode.FORBIDDEN));
     }
 
     // 🔥 FIXED TOKEN STRUCTURE

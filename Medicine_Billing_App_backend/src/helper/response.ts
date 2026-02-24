@@ -5,8 +5,9 @@ signupSuccess: "Account created successfully!",
 invalidUserPasswordEmail: "You have entered an invalid email or password!",
 invalidToken: "Invalid token!",
 tokenExpired: "Token has expired!",
-accountBlock: "Your account has been blocked!",
-logout: "Logout successful!",
+  accountBlock: "Your account has been blocked!",
+  accountInactive: "Your account is inactive. Please contact admin.",
+  logout: "Logout successful!",
 
 
   // 🏢 ACCESS

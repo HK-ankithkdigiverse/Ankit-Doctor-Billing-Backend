@@ -39,6 +39,7 @@ export const createUserSchema = Joi.object({
   role: Joi.string()
     .valid(...Object.values(ROLE))
     .optional(),
+  isActive: Joi.boolean().optional(),
 });
 
 export const updateProfileSchema = Joi.object({
@@ -56,6 +57,7 @@ export const updateUserSchema = Joi.object({
   role: Joi.string()
     .valid(...Object.values(ROLE))
     .optional(),
+  isActive: Joi.boolean().optional(),
 }).min(1);
 
 export const idParamSchema = Joi.object({
