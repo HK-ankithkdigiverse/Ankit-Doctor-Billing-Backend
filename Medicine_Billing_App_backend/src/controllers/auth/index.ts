@@ -8,13 +8,48 @@ import { generateToken } from "../../helper/jwt";
 import bcrypt from "bcryptjs";
 import {AuthRequest} from "../../middleware/auth"
 import { ROLE } from "../../common";
+import { logger } from "../../helper/logger";
+
+interface AdminCreateUserBody {
+  name: string;
+  email: string;
+  password: string;
+  phone?: string;
+  address?: string;
+  role?: ROLE;
+}
+
+interface LoginBody {
+  email: string;
+  password: string;
+}
+
+interface VerifyOtpBody {
+  email: string;
+  otp: string;
+}
+
+interface ChangePasswordBody {
+  oldPassword: string;
+  newPassword: string;
+}
+
+interface ForgotPasswordBody {
+  email: string;
+}
+
+interface ResetPasswordBody {
+  email: string;
+  otp: string;
+  newPassword: string;
+}
 
 
 
 // ADMIN → CREATE USER
 export const adminCreateUser = async (req: AuthRequest, res: Response) => {
   try {
-    const { name, email, password, phone, address, role } = req.body;
+    const { name, email, password, phone, address, role } = req.body as AdminCreateUserBody;
 
     // Validate required fields
     if (!name || !email || !password) {
@@ -57,7 +92,7 @@ export const adminCreateUser = async (req: AuthRequest, res: Response) => {
       .status(StatusCode.CREATED)
       .json(ApiResponse.created(responseMessage.signupSuccess, { user: safeUser }));
   } catch (error) {
-    console.error("CREATE USER ERROR:", error);
+    logger.error("CREATE USER ERROR", error);
     return res
       .status(StatusCode.INTERNAL_ERROR)
       .json(ApiResponse.error(responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR));
@@ -67,7 +102,7 @@ export const adminCreateUser = async (req: AuthRequest, res: Response) => {
 /* ================= LOGIN ================= */
 export const login = async (req: Request, res: Response) => {
   try {
-    const { email, password } = req.body;
+    const { email, password } = req.body as LoginBody;
 
     const user = await User.findOne({ email });
     if (!user) {
@@ -101,11 +136,11 @@ export const login = async (req: Request, res: Response) => {
     });
 
     email_verification_mail(user.email, otp)
-      .catch(err => console.error("Email failed:", err));
+      .catch((err) => logger.error("Email failed", err));
 
     return res.status(StatusCode.OK).json(ApiResponse.success(responseMessage.loginSuccess));
   } catch (error) {
-    console.error(error);
+    logger.error("LOGIN ERROR", error);
     return res
       .status(StatusCode.INTERNAL_ERROR)
       .json(ApiResponse.error(responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR));
@@ -115,7 +150,7 @@ export const login = async (req: Request, res: Response) => {
 /* ================= VERIFY OTP ================= */
 export const verifyOtp = async (req: Request, res: Response) => {
   try {
-    const { email, otp } = req.body;
+    const { email, otp } = req.body as VerifyOtpBody;
     const normalizedEmail = email.toLowerCase().trim();
 
     const otpRecord = await Otp.findOne({ email: normalizedEmail, otp });
@@ -150,7 +185,7 @@ export const verifyOtp = async (req: Request, res: Response) => {
       })
     );
   } catch (error) {
-    console.error("VERIFY OTP ERROR:", error);
+    logger.error("VERIFY OTP ERROR", error);
     return res
       .status(StatusCode.INTERNAL_ERROR)
       .json(ApiResponse.error(responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR));
@@ -160,7 +195,7 @@ export const verifyOtp = async (req: Request, res: Response) => {
 export const changePassword = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user._id;
-    const { oldPassword, newPassword } = req.body;
+    const { oldPassword, newPassword } = req.body as ChangePasswordBody;
 
     const user = await User.findById(userId);
     if (!user) {
@@ -191,7 +226,7 @@ export const changePassword = async (req: AuthRequest, res: Response) => {
 
 export const forgotPassword = async (req: Request, res: Response) => {
   try {
-    const { email } = req.body;
+    const { email } = req.body as ForgotPasswordBody;
 
     const user = await User.findOne({ email });
     if (!user) {
@@ -221,7 +256,7 @@ export const forgotPassword = async (req: Request, res: Response) => {
 
 export const resetPassword = async (req: Request, res: Response) => {
   try {
-    const { email, otp, newPassword } = req.body;
+    const { email, otp, newPassword } = req.body as ResetPasswordBody;
 
     const otpRecord = await Otp.findOne({ email, otp });
     if (!otpRecord || otpRecord.expireAt < new Date()) {

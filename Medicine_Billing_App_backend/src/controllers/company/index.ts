@@ -3,6 +3,18 @@ import { CompanyModel } from "../../database/models/company";
 import { responseMessage } from "../../helper";
 import { ApiResponse, ROLE, StatusCode } from "../../common";
 import { AuthRequest } from "../../middleware/auth";
+import { logger } from "../../helper/logger";
+
+type CompanyPayload = {
+  name?: string;
+  companyName?: string;
+  gstNumber?: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+  state?: string;
+  logo?: string;
+};
 
 // ================= CREATE =================
 export const createCompany = async (
@@ -16,7 +28,7 @@ export const createCompany = async (
         .json(ApiResponse.error(responseMessage.accessDenied, null, StatusCode.UNAUTHORIZED));
     }
 
-    const { name: rawName, companyName, gstNumber, address, phone, email, state } = req.body;
+    const { name: rawName, companyName, gstNumber, address, phone, email, state } = req.body as CompanyPayload;
     const name = rawName || companyName;
 
 
@@ -33,11 +45,12 @@ export const createCompany = async (
     });
 
     return res.status(StatusCode.CREATED).json(ApiResponse.created("Company created successfully", { company: newCompany }));
-  } catch (error: any) {
-    console.log("CREATE ERROR:", error);
+  } catch (error) {
+    logger.error("CREATE COMPANY ERROR", error);
+    const message = error instanceof Error ? error.message : responseMessage.internalServerError;
     return res
       .status(StatusCode.INTERNAL_ERROR)
-      .json(ApiResponse.error(error.message, error, StatusCode.INTERNAL_ERROR));
+      .json(ApiResponse.error(message, error, StatusCode.INTERNAL_ERROR));
   }
 };
 
@@ -57,7 +70,7 @@ export const getAllCompanies = async (
     const limitNum = Number(limit);
     const skip = (pageNum - 1) * limitNum;
 
-    const filter: any = { isDeleted: false };
+    const filter: Record<string, unknown> = { isDeleted: false };
 
     // 🔐 Role based access
     if (req.user?.role !== ROLE.ADMIN) {
@@ -100,7 +113,7 @@ export const getAllCompanies = async (
         })
       );
   } catch (error) {
-    console.error("GET COMPANIES ERROR:", error);
+    logger.error("GET COMPANIES ERROR", error);
     return res
       .status(StatusCode.INTERNAL_ERROR)
       .json(ApiResponse.error(responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR));
@@ -109,7 +122,7 @@ export const getAllCompanies = async (
 
 
 // ================= GET SINGLE =================
-export const getSingleCompany = async (req: any, res: Response) => {
+export const getSingleCompany = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
       return res.status(StatusCode.UNAUTHORIZED).json({
@@ -120,7 +133,7 @@ export const getSingleCompany = async (req: any, res: Response) => {
     const { id } = req.params;
     const isAdmin = req.user.role === ROLE.ADMIN;
 
-    const filter: any = { _id: id, isDeleted: false };
+    const filter: Record<string, unknown> = { _id: id, isDeleted: false };
 
     if (!isAdmin) {
       filter.userId = req.user._id;
@@ -137,7 +150,7 @@ export const getSingleCompany = async (req: any, res: Response) => {
     return res.status(StatusCode.OK).json({ company });
 
   } catch (error) {
-    console.error("GET SINGLE COMPANY ERROR:", error);
+    logger.error("GET SINGLE COMPANY ERROR", error);
     return res.status(StatusCode.INTERNAL_ERROR).json({
       message: responseMessage.internalServerError,
     });
@@ -177,9 +190,9 @@ export const updateCompany = async (req: AuthRequest, res: Response) => {
     allowedFields.forEach((field) => {
       if (req.body[field] !== undefined) {
         if (field === "companyName") {
-          (company as any).name = req.body[field];
+          company.name = req.body[field];
         } else {
-          (company as any)[field] = req.body[field];
+          company.set(field, req.body[field]);
         }
       }
     });
@@ -195,7 +208,7 @@ export const updateCompany = async (req: AuthRequest, res: Response) => {
 
 
 // ================= DELETE (SOFT DELETE) =================
-export const deleteCompany = async (req: any, res: Response) => {
+export const deleteCompany = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
       return res.status(StatusCode.UNAUTHORIZED).json({
@@ -206,7 +219,7 @@ export const deleteCompany = async (req: any, res: Response) => {
     const { id } = req.params;
     const isAdmin = req.user.role === ROLE.ADMIN;
 
-    const filter: any = { _id: id, isDeleted: false };
+    const filter: Record<string, unknown> = { _id: id, isDeleted: false };
 
     if (!isAdmin) {
       filter.userId = req.user._id;
@@ -229,7 +242,7 @@ export const deleteCompany = async (req: any, res: Response) => {
     });
 
   } catch (error) {
-    console.error("DELETE COMPANY ERROR:", error);
+    logger.error("DELETE COMPANY ERROR", error);
     return res.status(StatusCode.INTERNAL_ERROR).json({
       message: responseMessage.internalServerError,
     });

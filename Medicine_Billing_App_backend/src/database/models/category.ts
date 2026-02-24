@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { MODEL } from "../../common";
+import { logger } from "../../helper";
 
 export interface ICategory extends mongoose.Document {
   createdBy: mongoose.Types.ObjectId;
@@ -45,16 +46,16 @@ export const ensureCategoryCollectionIndexes = async () => {
 
     if (hasLegacyNameIndex) {
       await CategoryModel.collection.dropIndex("name_1");
-      console.log("Dropped legacy category index: name_1");
+      logger.info("Dropped legacy category index", { index: "name_1" });
     }
 
     if (hasLegacyCreatedByUnique) {
       await CategoryModel.collection.dropIndex("createdBy_1");
-      console.log("Dropped legacy category index: createdBy_1 (unique)");
+      logger.info("Dropped legacy category index", { index: "createdBy_1", unique: true });
     }
   } catch (error: any) {
     if (error?.codeName !== "IndexNotFound") {
-      console.error("CATEGORY INDEX CLEANUP ERROR:", error);
+      logger.error("CATEGORY INDEX CLEANUP ERROR", error);
     }
   }
 };

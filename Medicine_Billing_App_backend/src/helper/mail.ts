@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { logger } from "./logger";
 
 const transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",
@@ -12,9 +13,9 @@ const transporter = nodemailer.createTransport({
 
 transporter.verify((error) => {
   if (error) {
-    console.error("SMTP ERROR:", error);
+    logger.error("SMTP ERROR", error);
   } else {
-    console.log("SMTP READY");
+    logger.info("SMTP READY");
   }
 });
 
@@ -89,7 +90,7 @@ export const email_verification_mail = async (email: string, otp: string) => {
 
     return true;
   } catch (error) {
-    console.error("Mail error:", error);
+    logger.error("Mail error", error);
     return false;
   }
 };
