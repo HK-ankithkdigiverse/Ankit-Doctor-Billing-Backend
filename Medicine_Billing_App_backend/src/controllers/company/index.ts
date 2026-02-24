@@ -1,12 +1,8 @@
 import { Request, Response } from "express";
-import mongoose from "mongoose";
 import { CompanyModel } from "../../database/models/company";
 import { responseMessage } from "../../helper";
 import { ApiResponse, ROLE, StatusCode } from "../../common";
 import { AuthRequest } from "../../middleware/auth";
-
-const getParamId = (idParam: string | string[] | undefined): string =>
-  Array.isArray(idParam) ? idParam[0] : idParam || "";
 
 // ================= CREATE =================
 export const createCompany = async (
@@ -113,7 +109,7 @@ export const getAllCompanies = async (
 
 
 // ================= GET SINGLE =================
-export const getSingleCompany = async (req: AuthRequest, res: Response) => {
+export const getSingleCompany = async (req: any, res: Response) => {
   try {
     if (!req.user) {
       return res.status(StatusCode.UNAUTHORIZED).json({
@@ -121,13 +117,7 @@ export const getSingleCompany = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    const id = getParamId(req.params.id);
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(StatusCode.BAD_REQUEST).json({
-        message: responseMessage.validationError("company id"),
-      });
-    }
-
+    const { id } = req.params;
     const isAdmin = req.user.role === ROLE.ADMIN;
 
     const filter: any = { _id: id, isDeleted: false };
@@ -158,8 +148,7 @@ export const getSingleCompany = async (req: AuthRequest, res: Response) => {
 // ================= UPDATE =================
 export const updateCompany = async (req: AuthRequest, res: Response) => {
   try {
-    const id = getParamId(req.params.id);
-    const company = await CompanyModel.findById(id);
+    const company = await CompanyModel.findById(req.params.id);
 
     if (!company) {
       return res.status(404).json({ message: responseMessage.getDataNotFound("Company") });
@@ -206,7 +195,7 @@ export const updateCompany = async (req: AuthRequest, res: Response) => {
 
 
 // ================= DELETE (SOFT DELETE) =================
-export const deleteCompany = async (req: AuthRequest, res: Response) => {
+export const deleteCompany = async (req: any, res: Response) => {
   try {
     if (!req.user) {
       return res.status(StatusCode.UNAUTHORIZED).json({
@@ -214,12 +203,7 @@ export const deleteCompany = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    const id = getParamId(req.params.id);
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(StatusCode.BAD_REQUEST).json({
-        message: responseMessage.validationError("company id"),
-      });
-    }
+    const { id } = req.params;
     const isAdmin = req.user.role === ROLE.ADMIN;
 
     const filter: any = { _id: id, isDeleted: false };

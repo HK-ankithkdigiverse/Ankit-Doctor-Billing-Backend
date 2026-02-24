@@ -1,39 +1,14 @@
-import mongoose from "mongoose";
-import { ensureCategoryCollectionIndexes } from "../models/category";
+import mongoose from 'mongoose';
+import express from 'express'
+import { ensureCategoryCollectionIndexes } from '../models/category';
+const dbUrl: any = process.env.DB_URL;
+const mongooseConnection = express()
+mongoose.set('strictQuery', false)
+mongoose.connect(
+    dbUrl
+).then(async () => {
+    console.log('Database successfully connected');
+    await ensureCategoryCollectionIndexes();
+}).catch(err => console.log(err));
 
-mongoose.set("strictQuery", false);
-
-let connectionPromise: Promise<typeof mongoose> | null = null;
-
-export const connectDatabase = async (): Promise<typeof mongoose> => {
-  if (mongoose.connection.readyState === 1) {
-    return mongoose;
-  }
-
-  if (connectionPromise) {
-    return connectionPromise;
-  }
-
-  const dbUrl = process.env.DB_URL;
-  if (!dbUrl) {
-    throw new Error("DB_URL is not set");
-  }
-
-  connectionPromise = mongoose
-    .connect(dbUrl, {
-      serverSelectionTimeoutMS: 30000,
-      connectTimeoutMS: 30000,
-      socketTimeoutMS: 45000,
-    })
-    .then(async (conn) => {
-      console.log("Database successfully connected");
-      await ensureCategoryCollectionIndexes();
-      return conn;
-    })
-    .catch((error) => {
-      connectionPromise = null;
-      throw error;
-    });
-
-  return connectionPromise;
-};
+export { mongooseConnection }

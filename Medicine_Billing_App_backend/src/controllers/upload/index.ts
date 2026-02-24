@@ -3,7 +3,6 @@ import path from "path";
 import fs from "fs/promises";
 import { existsSync } from "fs";
 import { getFilesValidator } from "../../validation";
-import { uploadDir } from "../../config/uploadPath";
 
 // ================= UPLOAD IMAGES =================
 export const uploadImages = async (req, res) => {
@@ -47,7 +46,7 @@ export const getImages = async (req, res) => {
     }
 
     const { page = 1, limit = 10, type } = value;
-    const directoryPath = uploadDir;
+    const directoryPath = path.join(process.cwd(), "uploads");
 
     let files = await fs.readdir(directoryPath);
 
@@ -115,7 +114,7 @@ export const deleteImage = async (req, res) => {
       : url.split("/").pop();
 
     const safeFilename = path.basename(fileToDelete);
-    const filePath = path.join(uploadDir, safeFilename);
+    const filePath = path.join(process.cwd(), "uploads", safeFilename);
 
     if (!existsSync(filePath)) {
       return res.status(StatusCode.NOT_FOUND).json({
