@@ -1,14 +1,14 @@
 import mongoose from 'mongoose';
-import express from 'express'
 import { ensureCategoryCollectionIndexes } from '../models/category';
 const dbUrl: any = process.env.DB_URL;
-const mongooseConnection = express()
-mongoose.set('strictQuery', false)
-mongoose.connect(
-    dbUrl
-).then(async () => {
+
+export const connectDatabase = async (): Promise<void> => {
+    if (!dbUrl) {
+        throw new Error("DB_URL is not set");
+    }
+
+    mongoose.set('strictQuery', false)
+    await mongoose.connect(dbUrl);
     console.log('Database successfully connected');
     await ensureCategoryCollectionIndexes();
-}).catch(err => console.log(err));
-
-export { mongooseConnection }
+};

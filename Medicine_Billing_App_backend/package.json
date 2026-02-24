@@ -7,10 +7,10 @@
     "build": "tsc",
     "clean": "npx rimraf ./build",
     "start": "node build/server.js",
-    "zip": "tar.exe -a -c -f execTrade-backend.zip build package.json scripts src .platform .npmrc .ebextensions",
+    "zip": "node ./scripts/build.mjs",
     "deploy": "start deploy.bat",
     "ebs": "start ebs.bat",
-    "dist": "sh ./scripts/build.sh",
+    "dist": "node ./scripts/build.mjs",
     "server": "tsc-watch --outDir ./build --onSuccess \"npm run start -- --mode=http\" --onFailure \"echo ERROR! Compilation Failed\""
   },
   "author": "Pramit Mangukiya",
