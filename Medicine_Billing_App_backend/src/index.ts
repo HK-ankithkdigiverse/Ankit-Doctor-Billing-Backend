@@ -27,8 +27,15 @@ app.get('/isServerUp', (req, res) => {
   res.send('Server is running ');
 });
 
-app.use('/', (req, res, next) => {
+app.get('/', (req, res, next) => {
   res.status(200).send("Welcome to the Medicine Billing App Backend");
+});
+
+app.use((req: Request, res: Response) => {
+  return res.status(404).json({
+    success: false,
+    message: "Route not found",
+  });
 });
 
 app.use(handleUploadError);
