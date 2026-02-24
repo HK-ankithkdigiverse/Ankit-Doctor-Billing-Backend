@@ -7,6 +7,7 @@ import {
   getProductById
 ,
 } from "../controllers/product/index";
+
 import { authMiddleware } from "../middleware/auth";
 import { validate } from "../middleware/joi";
 import {
