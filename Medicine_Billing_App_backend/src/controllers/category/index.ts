@@ -4,7 +4,6 @@ import { CategoryModel } from "../../database/models/category";
 import { responseMessage } from "../../helper";
 import { StatusCode } from "../../common";
 import { AuthRequest } from "../../middleware/auth";
-import { logger } from "../../helper/logger";
 
 const normalizeCategoryName = (name: string) => name.trim().toLowerCase();
 
@@ -88,7 +87,7 @@ export const createCategory = async (req: AuthRequest, res: Response) => {
       category: mapCategoryItem(createdCategory),
     });
   } catch (error) {
-    logger.error("CREATE CATEGORY ERROR", error);
+    console.error("CREATE CATEGORY ERROR", error);
     return res.status(StatusCode.INTERNAL_ERROR).json({
       message: responseMessage.internalServerError,
     });
@@ -131,7 +130,7 @@ export const getCategories = async (req: AuthRequest, res: Response) => {
       },
     });
   } catch (error) {
-    logger.error("GET CATEGORIES ERROR", error);
+    console.error("GET CATEGORIES ERROR", error);
     return res.status(StatusCode.INTERNAL_ERROR).json({
       message: responseMessage.internalServerError,
     });
@@ -167,7 +166,7 @@ export const getCategoryById = async (req: AuthRequest, res: Response) => {
 
     return res.status(StatusCode.OK).json(mapCategoryItem(category));
   } catch (error) {
-    logger.error("GET CATEGORY BY ID ERROR", error);
+    console.error("GET CATEGORY BY ID ERROR", error);
     return res.status(StatusCode.INTERNAL_ERROR).json({
       message: responseMessage.internalServerError,
     });
@@ -238,7 +237,7 @@ export const updateCategory = async (req: AuthRequest, res: Response) => {
       category: mapCategoryItem(category),
     });
   } catch (error) {
-    logger.error("UPDATE CATEGORY ERROR", error);
+    console.error("UPDATE CATEGORY ERROR", error);
     return res.status(StatusCode.INTERNAL_ERROR).json({
       message: responseMessage.internalServerError,
     });
@@ -275,7 +274,7 @@ export const deleteCategory = async (req: AuthRequest, res: Response) => {
       message: responseMessage.deleteDataSuccess("Category"),
     });
   } catch (error) {
-    logger.error("DELETE CATEGORY ERROR", error);
+    console.error("DELETE CATEGORY ERROR", error);
     return res.status(StatusCode.INTERNAL_ERROR).json({
       message: responseMessage.internalServerError,
     });
@@ -300,9 +299,10 @@ export const getActiveCategoriesForDropdown = async (
 
     return res.status(StatusCode.OK).json(categories);
   } catch (error) {
-    logger.error("GET CATEGORY DROPDOWN ERROR", error);
+    console.error("GET CATEGORY DROPDOWN ERROR", error);
     return res.status(StatusCode.INTERNAL_ERROR).json({
       message: responseMessage.internalServerError,
     });
   }
 };
+

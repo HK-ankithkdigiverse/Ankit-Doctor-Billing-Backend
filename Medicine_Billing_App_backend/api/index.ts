@@ -18,11 +18,10 @@ const ensureDatabaseConnection = async () => {
 export default async function handler(req: any, res: any) {
   try {
     await ensureDatabaseConnection();
-  } catch (error: any) {
+  } catch {
     return res.status(503).json({
       success: false,
-      message: "Database connection failed",
-      error: error?.message || "Unknown error",
+      message: "Service unavailable. Please try again.",
     });
   }
 

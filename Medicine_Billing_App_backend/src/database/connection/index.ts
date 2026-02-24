@@ -1,6 +1,5 @@
 import mongoose from 'mongoose';
 import { ensureCategoryCollectionIndexes } from '../models/category';
-import { logger } from '../../helper';
 
 const dbUrl = process.env.DB_URL;
 
@@ -11,6 +10,7 @@ export const connectDatabase = async (): Promise<void> => {
 
     mongoose.set('strictQuery', false)
     await mongoose.connect(dbUrl);
-    logger.info("Database successfully connected");
+    console.log("Database successfully connected");
     await ensureCategoryCollectionIndexes();
 };
+

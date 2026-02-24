@@ -8,7 +8,6 @@ import { generateToken } from "../../helper/jwt";
 import bcrypt from "bcryptjs";
 import {AuthRequest} from "../../middleware/auth"
 import { ROLE } from "../../common";
-import { logger } from "../../helper/logger";
 
 interface AdminCreateUserBody {
   name: string;
@@ -92,7 +91,7 @@ export const adminCreateUser = async (req: AuthRequest, res: Response) => {
       .status(StatusCode.CREATED)
       .json(ApiResponse.created(responseMessage.signupSuccess, { user: safeUser }));
   } catch (error) {
-    logger.error("CREATE USER ERROR", error);
+    console.error("CREATE USER ERROR", error);
     return res
       .status(StatusCode.INTERNAL_ERROR)
       .json(ApiResponse.error(responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR));
@@ -137,11 +136,11 @@ export const login = async (req: Request, res: Response) => {
     });
 
     email_verification_mail(user.email, otp)
-      .catch((err) => logger.error("Email failed", err));
+      .catch((err) => console.error("Email failed", err));
 
     return res.status(StatusCode.OK).json(ApiResponse.success(responseMessage.loginSuccess));
   } catch (error) {
-    logger.error("LOGIN ERROR", error);
+    console.error("LOGIN ERROR", error);
     return res
       .status(StatusCode.INTERNAL_ERROR)
       .json(ApiResponse.error(responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR));
@@ -186,7 +185,7 @@ export const verifyOtp = async (req: Request, res: Response) => {
       })
     );
   } catch (error) {
-    logger.error("VERIFY OTP ERROR", error);
+    console.error("VERIFY OTP ERROR", error);
     return res
       .status(StatusCode.INTERNAL_ERROR)
       .json(ApiResponse.error(responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR));
@@ -296,3 +295,4 @@ export const getMe = (req: AuthRequest, res: Response) => {
     .status(StatusCode.OK)
     .json(ApiResponse.success("Profile fetched", { _id: req.user._id, role: req.user.role }));
 };
+

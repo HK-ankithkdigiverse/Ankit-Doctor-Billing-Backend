@@ -5,7 +5,6 @@ import { BillItemModel } from "../../database/models/billItem";
 import { Product } from "../../database/models/productl";
 import { ApiResponse, StatusCode } from "../../common";
 import { responseMessage } from "../../helper";
-import { logger } from "../../helper/logger";
 
 interface AuthRequest extends Request {
   user?: any;
@@ -140,7 +139,7 @@ export const createBill = async (req: AuthRequest, res: Response) => {
         .status(StatusCode.CREATED)
       .json(ApiResponse.created(responseMessage.invoiceCreated, { billId: bill._id }));
   } catch (err: any) {
-    logger.error("CREATE BILL ERROR", { message: err?.message, err });
+    console.error("CREATE BILL ERROR", { message: err?.message, err });
 
     return res
       .status(StatusCode.INTERNAL_ERROR)
@@ -392,3 +391,4 @@ export const updateBill = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ message: responseMessage.internalServerError });
   }
 };
+

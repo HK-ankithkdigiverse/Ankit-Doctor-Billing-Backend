@@ -3,7 +3,6 @@ import { CompanyModel } from "../../database/models/company";
 import { responseMessage } from "../../helper";
 import { ApiResponse, ROLE, StatusCode } from "../../common";
 import { AuthRequest } from "../../middleware/auth";
-import { logger } from "../../helper/logger";
 
 type CompanyPayload = {
   name?: string;
@@ -46,7 +45,7 @@ export const createCompany = async (
 
     return res.status(StatusCode.CREATED).json(ApiResponse.created("Company created successfully", { company: newCompany }));
   } catch (error) {
-    logger.error("CREATE COMPANY ERROR", error);
+    console.error("CREATE COMPANY ERROR", error);
     const message = error instanceof Error ? error.message : responseMessage.internalServerError;
     return res
       .status(StatusCode.INTERNAL_ERROR)
@@ -113,7 +112,7 @@ export const getAllCompanies = async (
         })
       );
   } catch (error) {
-    logger.error("GET COMPANIES ERROR", error);
+    console.error("GET COMPANIES ERROR", error);
     return res
       .status(StatusCode.INTERNAL_ERROR)
       .json(ApiResponse.error(responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR));
@@ -150,7 +149,7 @@ export const getSingleCompany = async (req: AuthRequest, res: Response) => {
     return res.status(StatusCode.OK).json({ company });
 
   } catch (error) {
-    logger.error("GET SINGLE COMPANY ERROR", error);
+    console.error("GET SINGLE COMPANY ERROR", error);
     return res.status(StatusCode.INTERNAL_ERROR).json({
       message: responseMessage.internalServerError,
     });
@@ -242,9 +241,10 @@ export const deleteCompany = async (req: AuthRequest, res: Response) => {
     });
 
   } catch (error) {
-    logger.error("DELETE COMPANY ERROR", error);
+    console.error("DELETE COMPANY ERROR", error);
     return res.status(StatusCode.INTERNAL_ERROR).json({
       message: responseMessage.internalServerError,
     });
   }
 };
+
