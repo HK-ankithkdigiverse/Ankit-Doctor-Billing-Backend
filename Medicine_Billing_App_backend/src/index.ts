@@ -1,7 +1,7 @@
 import express, { NextFunction, Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from "dotenv";
-import apiRoutes from "./Routes";
+import apiRoutes from "./routes";
 import cookieParser from "cookie-parser";
 import { uploadDir } from "./common/uploadPath";
 import { handleUploadError } from "./middleware/upload";
