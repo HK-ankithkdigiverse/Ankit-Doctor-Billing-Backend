@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from "dotenv";
 import apiRoutes from "./routes";
 import cookieParser from "cookie-parser";
+import { uploadDir } from "./common/uploadPath";
 
 dotenv.config({ path: ".env" });
 
@@ -19,7 +20,7 @@ app.use((req, res, next) => {
 });
 
 app.use("/api", apiRoutes);
-app.use("/uploads", express.static("uploads"));
+app.use("/uploads", express.static(uploadDir));
 
 app.get('/isServerUp', (req, res) => {
   res.send('Server is running ');
