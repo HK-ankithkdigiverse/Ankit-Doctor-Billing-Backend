@@ -88,20 +88,29 @@ export const deleteUser = async (req: AuthRequest, res: Response) => {
 // ADMIN → GET ALL USERS
 export const getAllUsers = async (req: AuthRequest, res: Response) => {
   try {
-    const {
-      page = 1,
-      limit = 10,
-      search,
-    } = req.query;
+    const { page = 1, limit = 10, search } = req.query;
 
     const filter: any = { isDeleted: false };
 
-    // 🔍 Search by name or email
-    if (search) {
-      filter.$or = [
-        { name: { $regex: search as string, $options: "i" } },
-        { email: { $regex: search as string, $options: "i" } },
+    // 🔍 Search across user fields
+    const searchText = typeof search === "string" ? search.trim() : "";
+    if (searchText) {
+      const escapedSearch = searchText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const searchRegex = new RegExp(escapedSearch, "i");
+      const orFilters: any[] = [
+        { name: { $regex: searchRegex } },
+        { email: { $regex: searchRegex } },
+        { phone: { $regex: searchRegex } },
+        { address: { $regex: searchRegex } },
+        { role: { $regex: searchRegex } },
       ];
+
+      const loweredSearch = searchText.toLowerCase();
+      if (loweredSearch === "true" || loweredSearch === "false") {
+        orFilters.push({ isActive: loweredSearch === "true" });
+      }
+
+      filter.$or = orFilters;
     }
 
     // Exclude the requesting admin from the list
@@ -168,3 +177,4 @@ export const adminUpdateUser = async (req: AuthRequest, res: Response) => {
       .json(ApiResponse.error(responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR));
   }
 };
+
