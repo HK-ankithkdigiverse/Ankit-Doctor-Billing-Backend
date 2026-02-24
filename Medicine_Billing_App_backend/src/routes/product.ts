@@ -6,7 +6,7 @@ import {
   deleteProduct,
   getProductById
 ,
-} from "../controllers/product/index";
+} from "../controllers/Product/index";
 
 import { authMiddleware } from "../middleware/auth";
 import { validate } from "../middleware/joi";
