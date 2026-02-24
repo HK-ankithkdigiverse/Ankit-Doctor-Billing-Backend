@@ -54,10 +54,10 @@ export const updateUser = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// DELETE OWN ACCOUNT
+// ADMIN -> DELETE USER
 export const deleteUser = async (req: AuthRequest, res: Response) => {
   try {
-    const userId = req.user._id;
+    const { id: userId } = req.params;
 
     const user = await User.findByIdAndUpdate(
       userId,
@@ -74,7 +74,7 @@ export const deleteUser = async (req: AuthRequest, res: Response) => {
         .json(ApiResponse.error(responseMessage.getDataNotFound("User"), null, StatusCode.NOT_FOUND));
     }
 
-    return res.status(StatusCode.OK).json(ApiResponse.success(responseMessage.deleteDataSuccess("Account")));
+    return res.status(StatusCode.OK).json(ApiResponse.success(responseMessage.deleteDataSuccess("User")));
   } catch (error) {
     return res
       .status(StatusCode.INTERNAL_ERROR)
