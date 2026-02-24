@@ -1,13 +1,11 @@
 import app from "../src";
 import { connectDatabase } from "../src/database";
-
-let isDatabaseConnected = false;
+import mongoose from "mongoose";
 
 export default async function handler(req: any, res: any) {
   try {
-    if (!isDatabaseConnected) {
+    if (mongoose.connection.readyState !== 1) {
       await connectDatabase();
-      isDatabaseConnected = true;
     }
   } catch (error: any) {
     return res.status(503).json({
