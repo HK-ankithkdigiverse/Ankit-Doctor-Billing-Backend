@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { Product } from "../../database/models/productl";
+import { Product } from "../../database/models/product";
 import { responseMessage } from "../../helper";
 import { ApiResponse, StatusCode } from "../../common";
 import { AuthRequest } from "../../middleware/auth";
@@ -221,3 +221,4 @@ export const deleteProduct = async (req: AuthRequest, res: Response) => {
     });
   }
 };
+

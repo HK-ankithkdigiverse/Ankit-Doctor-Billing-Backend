@@ -2,7 +2,7 @@ import { Router } from "express";
 import authRoutes from "./auth";
 import uploadRoute from "./upload";
 import companyRoutes from "./company";
-import productRoutes from "./products";
+import productRoutes from "./product";
 import billRoutes from "./bill";
 import userRoutes from "./user";
 import categoryRoutes from "./category";
@@ -18,3 +18,4 @@ router.use("/users", userRoutes);
 router.use("/categories", categoryRoutes);
 
 export default router;
+

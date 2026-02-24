@@ -6,7 +6,7 @@ import {
   deleteProduct,
   getProductById
 ,
-} from "../controllers/Product/index";
+} from "../controllers/product/index";
 import { authMiddleware } from "../middleware/auth";
 import { validate } from "../middleware/joi";
 import {
@@ -28,3 +28,4 @@ router.get("/:id", validate(productIdParamSchema, "params"), getProductById);
 router.delete("/:id", validate(productIdParamSchema, "params"), deleteProduct);
 
 export default router;
+

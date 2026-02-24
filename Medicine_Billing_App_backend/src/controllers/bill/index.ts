@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import mongoose from "mongoose";
 import { BillModel } from "../../database/models/bill";
 import { BillItemModel } from "../../database/models/billItem";
-import { Product } from "../../database/models/productl";
+import { Product } from "../../database/models/product";
 import { ApiResponse, StatusCode } from "../../common";
 import { responseMessage } from "../../helper";
 
@@ -391,4 +391,5 @@ export const updateBill = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ message: responseMessage.internalServerError });
   }
 };
+
 
