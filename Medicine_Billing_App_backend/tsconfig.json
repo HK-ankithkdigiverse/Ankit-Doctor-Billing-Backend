@@ -16,6 +16,7 @@
       // "strictNullChecks": true,
       // "suppressImplicitAnyIndexErrors": true,
       // "noUnusedLocals": true,
-      "lib": ["es2015", "es2016", "esnext.asynciterable"]
+      "lib": ["es2017", "esnext.asynciterable"],
+      "types": ["node"]
   }
 }
