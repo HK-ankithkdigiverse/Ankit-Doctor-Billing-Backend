@@ -10,6 +10,21 @@ interface AuthRequest extends Request {
   user?: any;
 }
 
+const BILL_USER_POPULATE_FIELDS = [
+  "name",
+  "medicalName",
+  "ownerName",
+  "email",
+  "phone",
+  "address",
+  "state",
+  "city",
+  "pincode",
+  "gstNumber",
+  "panCardNumber",
+  "role",
+].join(" ");
+
 export const createBill = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user?._id) {
@@ -179,7 +194,7 @@ export const getAllBills = async (req: AuthRequest, res: Response) => {
 
     const bills = await BillModel.find(filter)
       .populate("companyId", "name companyName gstNumber logo address phone email state")
-      .populate("userId", "name email phone address role")
+      .populate("userId", BILL_USER_POPULATE_FIELDS)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
@@ -210,7 +225,7 @@ export const getBillById = async (req: AuthRequest, res: Response) => {
       isDeleted: false,
     })
       .populate("companyId", "name companyName gstNumber logo address phone email state")
-      .populate("userId", "name email phone address role");
+      .populate("userId", BILL_USER_POPULATE_FIELDS);
 
     if (!bill)
       return res.status(404).json({ message: responseMessage.invoiceNotFound });

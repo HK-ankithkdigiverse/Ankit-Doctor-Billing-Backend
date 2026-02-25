@@ -10,11 +10,18 @@ import {AuthRequest} from "../../middleware/auth"
 import { ROLE } from "../../common";
 
 interface AdminCreateUserBody {
-  name: string;
+  name?: string;
+  medicalName: string;
+  ownerName: string;
   email: string;
   password: string;
   phone?: string;
-  address?: string;
+  address: string;
+  state: string;
+  city: string;
+  pincode: string;
+  gstNumber: string;
+  panCardNumber: string;
   role?: ROLE;
   isActive?: boolean;
 }
@@ -49,15 +56,43 @@ interface ResetPasswordBody {
 // ADMIN → CREATE USER
 export const adminCreateUser = async (req: AuthRequest, res: Response) => {
   try {
-    const { name, email, password, phone, address, role, isActive } = req.body as AdminCreateUserBody;
+    const {
+      name,
+      medicalName,
+      ownerName,
+      email,
+      password,
+      phone,
+      address,
+      state,
+      city,
+      pincode,
+      gstNumber,
+      panCardNumber,
+      role,
+      isActive,
+    } = req.body as AdminCreateUserBody;
 
     // Validate required fields
-    if (!name || !email || !password) {
+    if (
+      !email ||
+      !password ||
+      !medicalName ||
+      !ownerName ||
+      !address ||
+      !state ||
+      !city ||
+      !pincode ||
+      !gstNumber ||
+      !panCardNumber
+    ) {
       return res
         .status(StatusCode.BAD_REQUEST)
         .json(
           ApiResponse.error(
-            responseMessage.validationError("name, email and password"),
+            responseMessage.validationError(
+              "email, password, medicalName, ownerName, address, state, city, pincode, gstNumber and panCardNumber"
+            ),
             null,
             StatusCode.BAD_REQUEST
           )
@@ -77,11 +112,18 @@ export const adminCreateUser = async (req: AuthRequest, res: Response) => {
     const hashPassword = await bcrypt.hash(password, 12);
 
     const user = await User.create({
-      name,
+      name: (name || ownerName).trim(),
+      medicalName: medicalName.trim(),
+      ownerName: ownerName.trim(),
       email: normalizedEmail,
       password: hashPassword,
       phone,
-      address,
+      address: address.trim(),
+      state: state.trim(),
+      city: city.trim(),
+      pincode: pincode.trim(),
+      gstNumber: gstNumber.trim().toUpperCase(),
+      panCardNumber: panCardNumber.trim().toUpperCase(),
       role: role || ROLE.USER,
       isActive: typeof isActive === "boolean" ? isActive : true,
     });

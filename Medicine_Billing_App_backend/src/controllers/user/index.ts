@@ -30,11 +30,38 @@ export const getProfile = async (req: AuthRequest, res: Response) => {
 export const updateUser = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user._id;
-    const { name, email, phone, address } = req.body;
+    const {
+      name,
+      medicalName,
+      ownerName,
+      email,
+      phone,
+      address,
+      state,
+      city,
+      pincode,
+      gstNumber,
+      panCardNumber,
+    } = req.body;
+
+    const updatePayload: Record<string, unknown> = {};
+
+    if (name !== undefined) updatePayload.name = name;
+    if (medicalName !== undefined) updatePayload.medicalName = medicalName;
+    if (ownerName !== undefined) updatePayload.ownerName = ownerName;
+    if (ownerName !== undefined && name === undefined) updatePayload.name = ownerName;
+    if (email !== undefined) updatePayload.email = email;
+    if (phone !== undefined) updatePayload.phone = phone;
+    if (address !== undefined) updatePayload.address = address;
+    if (state !== undefined) updatePayload.state = state;
+    if (city !== undefined) updatePayload.city = city;
+    if (pincode !== undefined) updatePayload.pincode = pincode;
+    if (gstNumber !== undefined) updatePayload.gstNumber = String(gstNumber).toUpperCase();
+    if (panCardNumber !== undefined) updatePayload.panCardNumber = String(panCardNumber).toUpperCase();
 
     const updatedUser = await User.findByIdAndUpdate(
       userId,
-      { name, email, phone, address },
+      updatePayload,
       { new: true }
     ).select("-password");
 
@@ -99,9 +126,16 @@ export const getAllUsers = async (req: AuthRequest, res: Response) => {
       const searchRegex = new RegExp(escapedSearch, "i");
       const orFilters: any[] = [
         { name: { $regex: searchRegex } },
+        { medicalName: { $regex: searchRegex } },
+        { ownerName: { $regex: searchRegex } },
         { email: { $regex: searchRegex } },
         { phone: { $regex: searchRegex } },
         { address: { $regex: searchRegex } },
+        { state: { $regex: searchRegex } },
+        { city: { $regex: searchRegex } },
+        { pincode: { $regex: searchRegex } },
+        { gstNumber: { $regex: searchRegex } },
+        { panCardNumber: { $regex: searchRegex } },
         { role: { $regex: searchRegex } },
       ];
 
@@ -155,10 +189,23 @@ export const getAllUsers = async (req: AuthRequest, res: Response) => {
 export const adminUpdateUser = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
+    const payload = { ...req.body };
+
+    if (payload.gstNumber !== undefined) {
+      payload.gstNumber = String(payload.gstNumber).toUpperCase();
+    }
+
+    if (payload.panCardNumber !== undefined) {
+      payload.panCardNumber = String(payload.panCardNumber).toUpperCase();
+    }
+
+    if (payload.ownerName !== undefined && payload.name === undefined) {
+      payload.name = payload.ownerName;
+    }
 
     const user = await User.findByIdAndUpdate(
       id,
-      req.body,
+      payload,
       { new: true }
     ).select("-password");
 

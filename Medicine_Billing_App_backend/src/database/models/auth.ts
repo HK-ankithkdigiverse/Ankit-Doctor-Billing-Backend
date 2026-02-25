@@ -3,10 +3,17 @@ import { MODEL, ROLE } from "../../common";
 
 export interface IAuth extends Document {
   name: string;
+  medicalName: string;
+  ownerName: string;
   email: string;
   password: string;
   phone: string;
   address: string;
+  state: string;
+  city: string;
+  pincode: string;
+  gstNumber: string;
+  panCardNumber: string;
   role: ROLE;
   isActive: boolean;
   isDeleted: boolean;
@@ -16,19 +23,29 @@ const userSchema = new mongoose.Schema<IAuth>(
   {
     name: {
       type: String,
-      required: true, // ✅ FIX
+      required: true,
       trim: true,
+    },
+    medicalName: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    ownerName: {
+      type: String,
+      trim: true,
+      default: "",
     },
     email: {
       type: String,
-      required: true, // ✅ FIX
+      required: true,
       unique: true,
       lowercase: true,
       trim: true,
     },
     password: {
       type: String,
-      required: true, // ✅ FIX
+      required: true,
     },
     phone: {
       type: String,
@@ -37,6 +54,34 @@ const userSchema = new mongoose.Schema<IAuth>(
     address: {
       type: String,
       trim: true,
+      default: "",
+    },
+    state: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    city: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    pincode: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    gstNumber: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      default: "",
+    },
+    panCardNumber: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      default: "",
     },
     role: {
       type: String,
