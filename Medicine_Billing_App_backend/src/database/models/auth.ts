@@ -4,7 +4,6 @@ import { MODEL, ROLE } from "../../common";
 export interface IAuth extends Document {
   name: string;
   medicalName: string;
-  ownerName: string;
   email: string;
   password: string;
   phone: string;
@@ -27,11 +26,6 @@ const userSchema = new mongoose.Schema<IAuth>(
       trim: true,
     },
     medicalName: {
-      type: String,
-      trim: true,
-      default: "",
-    },
-    ownerName: {
       type: String,
       trim: true,
       default: "",

@@ -48,7 +48,6 @@ export const updateUser = async (req: AuthRequest, res: Response) => {
 
     if (name !== undefined) updatePayload.name = name;
     if (medicalName !== undefined) updatePayload.medicalName = medicalName;
-    if (ownerName !== undefined) updatePayload.ownerName = ownerName;
     if (ownerName !== undefined && name === undefined) updatePayload.name = ownerName;
     if (email !== undefined) updatePayload.email = email;
     if (phone !== undefined) updatePayload.phone = phone;
@@ -127,7 +126,6 @@ export const getAllUsers = async (req: AuthRequest, res: Response) => {
       const orFilters: any[] = [
         { name: { $regex: searchRegex } },
         { medicalName: { $regex: searchRegex } },
-        { ownerName: { $regex: searchRegex } },
         { email: { $regex: searchRegex } },
         { phone: { $regex: searchRegex } },
         { address: { $regex: searchRegex } },
@@ -201,6 +199,9 @@ export const adminUpdateUser = async (req: AuthRequest, res: Response) => {
 
     if (payload.ownerName !== undefined && payload.name === undefined) {
       payload.name = payload.ownerName;
+    }
+    if (payload.ownerName !== undefined) {
+      delete payload.ownerName;
     }
 
     const user = await User.findByIdAndUpdate(

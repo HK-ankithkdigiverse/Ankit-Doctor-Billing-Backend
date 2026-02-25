@@ -13,7 +13,6 @@ interface AuthRequest extends Request {
 const BILL_USER_POPULATE_FIELDS = [
   "name",
   "medicalName",
-  "ownerName",
   "email",
   "phone",
   "address",

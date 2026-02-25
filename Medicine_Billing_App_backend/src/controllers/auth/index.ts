@@ -114,7 +114,6 @@ export const adminCreateUser = async (req: AuthRequest, res: Response) => {
     const user = await User.create({
       name: (name || ownerName).trim(),
       medicalName: medicalName.trim(),
-      ownerName: ownerName.trim(),
       email: normalizedEmail,
       password: hashPassword,
       phone,
