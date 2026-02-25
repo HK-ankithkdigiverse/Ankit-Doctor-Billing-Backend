@@ -3,6 +3,8 @@ import mongoose from "mongoose";
 import { BillModel } from "../../database/models/bill";
 import { BillItemModel } from "../../database/models/billItem";
 import { Product } from "../../database/models/product";
+import { CompanyModel } from "../../database/models/company";
+import User from "../../database/models/auth";
 import { ApiResponse, StatusCode } from "../../common";
 import { responseMessage } from "../../helper";
 
@@ -32,7 +34,35 @@ export const createBill = async (req: AuthRequest, res: Response) => {
         .json(ApiResponse.error(responseMessage.accessDenied, null, StatusCode.UNAUTHORIZED));
     }
 
-    const { companyId, items, discount = 0 } = req.body;
+    const { companyId, items, discount = 0, userId: payloadUserId } = req.body;
+    const isAdmin = req.user?.role === "ADMIN";
+
+    if (isAdmin && !payloadUserId) {
+      return res
+        .status(StatusCode.BAD_REQUEST)
+        .json(
+          ApiResponse.error(
+            responseMessage.validationError("user"),
+            null,
+            StatusCode.BAD_REQUEST
+          )
+        );
+    }
+
+    const targetUserId = isAdmin ? payloadUserId : req.user?._id;
+
+    if (!targetUserId || !mongoose.Types.ObjectId.isValid(String(targetUserId))) {
+      return res
+        .status(StatusCode.BAD_REQUEST)
+        .json(ApiResponse.error(responseMessage.validationError("user"), null, StatusCode.BAD_REQUEST));
+    }
+
+    const targetUser = await User.findById(targetUserId).select("_id");
+    if (!targetUser) {
+      return res
+        .status(StatusCode.BAD_REQUEST)
+        .json(ApiResponse.error(responseMessage.getDataNotFound("User"), null, StatusCode.BAD_REQUEST));
+    }
 
     if (!companyId) {
       return res
@@ -44,6 +74,25 @@ export const createBill = async (req: AuthRequest, res: Response) => {
       return res
         .status(StatusCode.BAD_REQUEST)
         .json(ApiResponse.error(responseMessage.validationError("items"), null, StatusCode.BAD_REQUEST));
+    }
+
+    const companyFilter: any = { _id: companyId, isDeleted: false };
+    if (!isAdmin) {
+      companyFilter.userId = req.user?._id;
+    } else {
+      companyFilter.userId = targetUserId;
+    }
+    const company = await CompanyModel.findOne(companyFilter).select("_id userId");
+    if (!company) {
+      return res
+        .status(StatusCode.BAD_REQUEST)
+        .json(
+          ApiResponse.error(
+            responseMessage.validationError("company for selected user"),
+            null,
+            StatusCode.BAD_REQUEST
+          )
+        );
     }
 
     let subTotal = 0;
@@ -139,7 +188,7 @@ export const createBill = async (req: AuthRequest, res: Response) => {
     const bill = await BillModel.create({
       billNo: `BILL-${Date.now()}`,
       companyId,
-      userId: req.user?._id,
+      userId: targetUserId,
       subTotal,
       totalTax,
       discount: discountAmount,
@@ -285,11 +334,37 @@ export const updateBill = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: responseMessage.accessDenied });
     }
 
-    const { companyId, items, discount } = req.body;
+    const { companyId, items, discount, userId: payloadUserId } = req.body;
+
+    if (payloadUserId !== undefined) {
+      if (!isAdmin) {
+        return res.status(403).json({ message: responseMessage.accessDenied });
+      }
+      if (!mongoose.Types.ObjectId.isValid(String(payloadUserId))) {
+        return res.status(400).json({ message: "Invalid userId" });
+      }
+      const targetUser = await User.findById(payloadUserId).select("_id");
+      if (!targetUser) {
+        return res.status(400).json({ message: responseMessage.getDataNotFound("User") });
+      }
+      bill.userId = payloadUserId;
+    }
 
     if (companyId) {
       if (!mongoose.Types.ObjectId.isValid(companyId)) {
         return res.status(400).json({ message: "Invalid companyId" });
+      }
+      const companyFilter: any = { _id: companyId, isDeleted: false };
+      if (!isAdmin) {
+        companyFilter.userId = req.user?._id;
+      } else {
+        companyFilter.userId = bill.userId;
+      }
+      const company = await CompanyModel.findOne(companyFilter).select("_id");
+      if (!company) {
+        return res
+          .status(400)
+          .json({ message: responseMessage.validationError("company for selected user") });
       }
       bill.companyId = companyId;
     }

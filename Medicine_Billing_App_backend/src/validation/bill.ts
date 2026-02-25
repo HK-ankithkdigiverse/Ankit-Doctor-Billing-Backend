@@ -22,6 +22,7 @@ const billItemSchema = Joi.object({
    CREATE BILL
 ========================= */
 export const createBillSchema = Joi.object({
+  userId: objectId.optional(),
   companyId: objectId.required(),
 
   discount: Joi.number().min(0).optional(),
@@ -36,6 +37,7 @@ export const createBillSchema = Joi.object({
    UPDATE BILL
 ========================= */
 export const updateBillSchema = Joi.object({
+  userId: objectId.optional(),
   companyId: objectId.optional(),
   discount: Joi.number().min(0).optional(),
   items: Joi.array().items(billItemSchema).min(1).optional(),
