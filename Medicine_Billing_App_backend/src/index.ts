@@ -1,12 +1,10 @@
+import "dotenv/config";
 import express, { NextFunction, Request, Response } from 'express';
 import cors from 'cors';
-import dotenv from "dotenv";
 import apiRoutes from "./routes";
 import cookieParser from "cookie-parser";
 import { uploadDir } from "./common/uploadPath";
 import { handleUploadError } from "./middleware/upload";
-
-dotenv.config({ path: ".env" });
 
 const app = express();
 
