@@ -6,7 +6,6 @@ const email = Joi.string().trim().lowercase().email();
 const phone = Joi.string().trim().pattern(/^[0-9]{10}$/);
 const nameField = Joi.string().trim().min(2).max(100);
 const medicalName = Joi.string().trim().min(2).max(120);
-const ownerName = Joi.string().trim().min(2).max(120);
 const address = Joi.string().trim().min(3).max(500);
 const state = Joi.string().trim().min(2).max(80);
 const city = Joi.string().trim().min(2).max(80);
@@ -40,9 +39,8 @@ export const changePasswordSchema = Joi.object({
 });
 
 export const createUserSchema = Joi.object({
-  name: nameField.optional(),
+  name: nameField.required(),
   medicalName: medicalName.required(),
-  ownerName: ownerName.required(),
   email: email.required(),
   password: Joi.string().min(6).max(64).required(),
   phone: phone.allow("").optional(),
@@ -61,7 +59,6 @@ export const createUserSchema = Joi.object({
 export const updateProfileSchema = Joi.object({
   name: nameField.optional(),
   medicalName: medicalName.optional(),
-  ownerName: ownerName.optional(),
   email: email.optional(),
   phone: phone.allow("").optional(),
   address: address.optional(),
@@ -75,7 +72,6 @@ export const updateProfileSchema = Joi.object({
 export const updateUserSchema = Joi.object({
   name: nameField.optional(),
   medicalName: medicalName.optional(),
-  ownerName: ownerName.optional(),
   email: email.optional(),
   phone: phone.allow("").optional(),
   address: address.optional(),

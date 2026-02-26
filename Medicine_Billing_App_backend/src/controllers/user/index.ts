@@ -195,13 +195,6 @@ export const adminUpdateUser = async (req: AuthRequest, res: Response) => {
       payload.panCardNumber = String(payload.panCardNumber).toUpperCase();
     }
 
-    if (payload.ownerName !== undefined && payload.name === undefined) {
-      payload.name = payload.ownerName;
-    }
-    if (payload.ownerName !== undefined) {
-      delete payload.ownerName;
-    }
-
     const user = await User.findByIdAndUpdate(
       id,
       payload,
@@ -223,4 +216,3 @@ export const adminUpdateUser = async (req: AuthRequest, res: Response) => {
       .json(ApiResponse.error(responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR));
   }
 };
-

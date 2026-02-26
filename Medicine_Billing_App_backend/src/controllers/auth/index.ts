@@ -10,9 +10,8 @@ import {AuthRequest} from "../../middleware/auth"
 import { ROLE } from "../../common";
 
 interface AdminCreateUserBody {
-  name?: string;
+  name: string;
   medicalName: string;
-  ownerName: string;
   email: string;
   password: string;
   phone?: string;
@@ -76,6 +75,7 @@ export const adminCreateUser = async (req: AuthRequest, res: Response) => {
     if (
       !email ||
       !password ||
+      !name ||
       !medicalName ||
       !address ||
       !state ||
@@ -89,7 +89,7 @@ export const adminCreateUser = async (req: AuthRequest, res: Response) => {
         .json(
           ApiResponse.error(
             responseMessage.validationError(
-              "email, password, medicalName, ownerName, address, state, city, pincode, gstNumber and panCardNumber"
+              "name, email, password, medicalName, address, state, city, pincode, gstNumber and panCardNumber"
             ),
             null,
             StatusCode.BAD_REQUEST
@@ -110,7 +110,7 @@ export const adminCreateUser = async (req: AuthRequest, res: Response) => {
     const hashPassword = await bcrypt.hash(password, 12);
 
     const user = await User.create({
-      name: (name).trim(),
+      name: name.trim(),
       medicalName: medicalName.trim(),
       email: normalizedEmail,
       password: hashPassword,
@@ -359,4 +359,3 @@ export const getMe = (req: AuthRequest, res: Response) => {
     .status(StatusCode.OK)
     .json(ApiResponse.success("Profile fetched", { _id: req.user._id, role: req.user.role }));
 };
-
