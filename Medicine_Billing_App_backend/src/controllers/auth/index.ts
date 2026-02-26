@@ -184,10 +184,15 @@ export const login = async (req: Request, res: Response) => {
       expireAt: new Date(Date.now() + 5 * 60 * 1000),
     });
 
-    email_verification_mail(user.email, otp)
-      .catch((err) => console.error("Email failed", err));
+    const sent = await email_verification_mail(normalizedEmail, otp);
+    if (!sent) {
+      await Otp.deleteMany({ email: normalizedEmail });
+      return res
+        .status(StatusCode.INTERNAL_ERROR)
+        .json(ApiResponse.error(responseMessage.otpSendFailed, null, StatusCode.INTERNAL_ERROR));
+    }
 
-    return res.status(StatusCode.OK).json(ApiResponse.success(responseMessage.loginSuccess));
+    return res.status(StatusCode.OK).json(ApiResponse.success(responseMessage.otpSent));
   } catch (error) {
     console.error("LOGIN ERROR", error);
     return res
@@ -300,9 +305,15 @@ export const forgotPassword = async (req: Request, res: Response) => {
       expireAt: new Date(Date.now() + 5 * 60 * 1000),
     });
 
-    email_verification_mail(normalizedEmail, otp);
+    const sent = await email_verification_mail(normalizedEmail, otp);
+    if (!sent) {
+      await Otp.deleteMany({ email: normalizedEmail });
+      return res
+        .status(StatusCode.INTERNAL_ERROR)
+        .json(ApiResponse.error(responseMessage.otpSendFailed, null, StatusCode.INTERNAL_ERROR));
+    }
 
-    return res.status(StatusCode.OK).json(ApiResponse.success(responseMessage.loginSuccess));
+    return res.status(StatusCode.OK).json(ApiResponse.success(responseMessage.otpSent));
   } catch (error) {
     return res
       .status(StatusCode.INTERNAL_ERROR)

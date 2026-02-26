@@ -1,9 +1,9 @@
 import nodemailer from "nodemailer";
 
 const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 587,
-  secure: false,
+  host: process.env.MAIL_HOST || "smtp.gmail.com",
+  port: Number(process.env.MAIL_PORT || 587),
+  secure: String(process.env.MAIL_SECURE || "false") === "true",
   auth: {
     user: process.env.MAIL_USER,
     pass: process.env.MAIL_PASSWORD,
@@ -19,8 +19,13 @@ transporter.verify((error) => {
 });
 
 export const email_verification_mail = async (email: string, otp: string) => {
+  if (!process.env.MAIL_USER || !process.env.MAIL_PASSWORD) {
+    console.error("MAIL CONFIG ERROR: MAIL_USER or MAIL_PASSWORD missing");
+    return false;
+  }
+
   try {
-    await transporter.sendMail({
+    const info = await transporter.sendMail({
       from: `"MedBill Pro" <${process.env.MAIL_USER}>`,
       to: email,
       subject: "Your OTP for MedBill Pro",
@@ -87,6 +92,7 @@ export const email_verification_mail = async (email: string, otp: string) => {
       `,
     });
 
+    console.log("Mail sent", { messageId: info.messageId, to: email });
     return true;
   } catch (error) {
     console.error("Mail error", error);
