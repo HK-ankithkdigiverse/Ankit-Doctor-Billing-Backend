@@ -1,6 +1,11 @@
-import { Request, Response } from "express";
+import { Response } from "express";
 import { Product } from "../../database/models/product";
-import { responseMessage } from "../../helper";
+import {
+  countData,
+  createData,
+  findOneAndPopulate,
+  responseMessage,
+} from "../../helper";
 import { ApiResponse, StatusCode } from "../../common";
 import { AuthRequest } from "../../middleware/auth";
 import mongoose from "mongoose";
@@ -22,7 +27,7 @@ export const createProduct = async (req: AuthRequest, res: Response) => {
         .json(ApiResponse.error(responseMessage.validationError("company"), null, StatusCode.BAD_REQUEST));
     }
 
-    const product = await Product.create({
+    const product = await createData(Product, {
       ...req.body,
       companyId,
       createdBy: req.user._id, // ✅ FIXED
@@ -60,9 +65,16 @@ export const getProductById = async (req: AuthRequest, res: Response) => {
       filter.createdBy = req.user?._id;
     }
 
-    const product = await Product.findOne(filter)
-      .populate("companyId", "name companyName")
-      .populate("createdBy", "name email role");
+    const product = await findOneAndPopulate(
+      Product,
+      filter,
+      undefined,
+      undefined,
+      [
+        { path: "companyId", select: "name companyName" },
+        { path: "createdBy", select: "name email role" },
+      ]
+    );
 
     if (!product) {
       return res.status(StatusCode.NOT_FOUND).json({
@@ -126,8 +138,7 @@ export const getProducts = async (req: AuthRequest, res: Response) => {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limitNum),
-
-      Product.countDocuments(filter),
+      countData(Product, filter),
     ]);
 
     return res.status(StatusCode.OK).json({

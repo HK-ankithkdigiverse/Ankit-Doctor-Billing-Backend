@@ -1,7 +1,15 @@
 import { Response } from "express";
 import mongoose from "mongoose";
 import { CategoryModel } from "../../database/models/category";
-import { responseMessage } from "../../helper";
+import {
+  countData,
+  createData,
+  findAllWithPopulate,
+  findOneAndPopulate,
+  getDataWithSorting,
+  getFirstMatch,
+  responseMessage,
+} from "../../helper";
 import { StatusCode } from "../../common";
 import { AuthRequest } from "../../middleware/auth";
 
@@ -37,10 +45,22 @@ const getAccessibleCategories = async (req: AuthRequest) => {
   const filter = getCategoryFilter(req);
 
   if (req.user?.role === "ADMIN") {
-    return CategoryModel.find(filter).populate("createdBy", "name email role");
+    return findAllWithPopulate(
+      CategoryModel,
+      filter,
+      undefined,
+      undefined,
+      { path: "createdBy", select: "name email role" }
+    );
   }
 
-  return CategoryModel.find(filter).populate("createdBy", "name email role");
+  return findAllWithPopulate(
+    CategoryModel,
+    filter,
+    undefined,
+    undefined,
+    { path: "createdBy", select: "name email role" }
+  );
 };
 
 /* ================= CREATE CATEGORY ================= */
@@ -61,11 +81,11 @@ export const createCategory = async (req: AuthRequest, res: Response) => {
     const normalizedName = normalizeCategoryName(name);
     const normalizedDescription = normalizeCategoryDescription(description);
 
-    const existing = await CategoryModel.findOne({
+    const existing = await findOneAndPopulate(CategoryModel, {
       createdBy: req.user._id,
       name: normalizedName,
       isDeleted: false,
-    }).populate("createdBy", "name email role");
+    }, undefined, undefined, { path: "createdBy", select: "name email role" });
 
     if (existing) {
       return res
@@ -73,7 +93,7 @@ export const createCategory = async (req: AuthRequest, res: Response) => {
         .json({ message: "Category already exists" });
     }
 
-    const createdCategory = await CategoryModel.create({
+    const createdCategory: any = await createData(CategoryModel, {
       createdBy: req.user._id,
       name: normalizedName,
       description: normalizedDescription,
@@ -117,7 +137,7 @@ export const getCategories = async (req: AuthRequest, res: Response) => {
         .sort({ createdAt: -1 })
         .skip((pageNum - 1) * limitNum)
         .limit(limitNum),
-      CategoryModel.countDocuments(filter),
+      countData(CategoryModel, filter),
     ]);
 
     return res.status(StatusCode.OK).json({
@@ -153,9 +173,12 @@ export const getCategoryById = async (req: AuthRequest, res: Response) => {
       filter.createdBy = req.user?._id;
     }
 
-    const category = await CategoryModel.findOne(filter).populate(
-      "createdBy",
-      "name email role"
+    const category = await findOneAndPopulate(
+      CategoryModel,
+      filter,
+      undefined,
+      undefined,
+      { path: "createdBy", select: "name email role" }
     );
 
     if (!category) {
@@ -209,7 +232,7 @@ export const updateCategory = async (req: AuthRequest, res: Response) => {
       }
 
       const normalizedName = normalizeCategoryName(name);
-      const duplicate = await CategoryModel.findOne({
+      const duplicate = await getFirstMatch(CategoryModel, {
         _id: { $ne: id },
         createdBy: category.createdBy,
         name: normalizedName,
@@ -290,7 +313,7 @@ export const getActiveCategoriesForDropdown = async (
     const filter: any = getCategoryFilter(req);
     filter.isActive = true;
 
-    const categories = (await CategoryModel.find(filter).sort({ name: 1 }))
+    const categories = (await getDataWithSorting(CategoryModel, filter, undefined, { sort: { name: 1 } }))
       .map((cat: any) => ({
         _id: cat._id,
         name: safeText(cat.name),
@@ -305,4 +328,3 @@ export const getActiveCategoriesForDropdown = async (
     });
   }
 };
-

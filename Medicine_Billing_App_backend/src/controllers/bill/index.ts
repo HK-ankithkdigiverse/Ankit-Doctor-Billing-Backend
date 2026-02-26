@@ -6,7 +6,14 @@ import { Product } from "../../database/models/product";
 import { CompanyModel } from "../../database/models/company";
 import User from "../../database/models/auth";
 import { ApiResponse, StatusCode } from "../../common";
-import { responseMessage } from "../../helper";
+import {
+  countData,
+  createData,
+  findOneAndPopulate,
+  getFirstMatch,
+  insertMany,
+  responseMessage,
+} from "../../helper";
 
 interface AuthRequest extends Request {
   user?: any;
@@ -82,7 +89,7 @@ export const createBill = async (req: AuthRequest, res: Response) => {
     } else {
       companyFilter.userId = targetUserId;
     }
-    const company = await CompanyModel.findOne(companyFilter).select("_id userId");
+    const company = await getFirstMatch(CompanyModel, companyFilter, "_id userId");
     if (!company) {
       return res
         .status(StatusCode.BAD_REQUEST)
@@ -185,7 +192,7 @@ export const createBill = async (req: AuthRequest, res: Response) => {
 
     const grandTotal = totalBeforeDiscount - discountAmount;
 
-    const bill = await BillModel.create({
+    const bill: any = await createData(BillModel, {
       billNo: `BILL-${Date.now()}`,
       companyId,
       userId: targetUserId,
@@ -196,7 +203,7 @@ export const createBill = async (req: AuthRequest, res: Response) => {
     });
 
     billItems.forEach(b => (b.billId = bill._id));
-    await BillItemModel.insertMany(billItems);
+    await insertMany(BillItemModel, billItems);
 
     return res
         .status(StatusCode.CREATED)
@@ -247,7 +254,7 @@ export const getAllBills = async (req: AuthRequest, res: Response) => {
       .skip(skip)
       .limit(limit);
 
-    const total = await BillModel.countDocuments(filter);
+    const total = await countData(BillModel, filter);
 
     res.json({
       data: bills,
@@ -268,12 +275,19 @@ export const getAllBills = async (req: AuthRequest, res: Response) => {
 
 export const getBillById = async (req: AuthRequest, res: Response) => {
   try {
-    const bill = await BillModel.findOne({
-      _id: req.params.id,
-      isDeleted: false,
-    })
-      .populate("companyId", "name companyName gstNumber logo address phone email state")
-      .populate("userId", BILL_USER_POPULATE_FIELDS);
+    const bill: any = await findOneAndPopulate(
+      BillModel,
+      {
+        _id: req.params.id,
+        isDeleted: false,
+      },
+      undefined,
+      undefined,
+      [
+        { path: "companyId", select: "name companyName gstNumber logo address phone email state" },
+        { path: "userId", select: BILL_USER_POPULATE_FIELDS },
+      ]
+    );
 
     if (!bill)
       return res.status(404).json({ message: responseMessage.invoiceNotFound });
@@ -360,7 +374,7 @@ export const updateBill = async (req: AuthRequest, res: Response) => {
       } else {
         companyFilter.userId = bill.userId;
       }
-      const company = await CompanyModel.findOne(companyFilter).select("_id");
+      const company = await getFirstMatch(CompanyModel, companyFilter, "_id");
       if (!company) {
         return res
           .status(400)
@@ -450,7 +464,7 @@ export const updateBill = async (req: AuthRequest, res: Response) => {
       }
 
       await BillItemModel.deleteMany({ billId: bill._id });
-      await BillItemModel.insertMany(nextItems);
+      await insertMany(BillItemModel, nextItems);
 
       bill.subTotal = subTotal;
       bill.totalTax = totalTax;

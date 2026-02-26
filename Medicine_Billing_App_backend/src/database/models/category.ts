@@ -36,26 +36,7 @@ categorySchema.index(
 export const CategoryModel = mongoose.model<ICategory>(MODEL.CATEGORY, categorySchema);
 
 export const ensureCategoryCollectionIndexes = async () => {
-  try {
-    const indexes = await CategoryModel.collection.indexes();
-    const hasLegacyNameIndex = indexes.some((index) => index.name === "name_1");
-    const hasLegacyCreatedByUnique = indexes.some(
-      (index) => index.name === "createdBy_1" && index.unique
-    );
-
-    if (hasLegacyNameIndex) {
-      await CategoryModel.collection.dropIndex("name_1");
-      console.log("Dropped legacy category index", { index: "name_1" });
-    }
-
-    if (hasLegacyCreatedByUnique) {
-      await CategoryModel.collection.dropIndex("createdBy_1");
-      console.log("Dropped legacy category index", { index: "createdBy_1", unique: true });
-    }
-  } catch (error: any) {
-    if (error?.codeName !== "IndexNotFound") {
-      console.error("CATEGORY INDEX CLEANUP ERROR", error);
-    }
-  }
+  await CategoryModel.syncIndexes();
 };
+
 

@@ -1,6 +1,12 @@
-import { Request, Response } from "express";
+import { Response } from "express";
 import { CompanyModel } from "../../database/models/company";
-import { responseMessage } from "../../helper";
+import {
+  countData,
+  createData,
+  getFirstMatch,
+  responseMessage,
+  updateData,
+} from "../../helper";
 import { ApiResponse, ROLE, StatusCode } from "../../common";
 import { AuthRequest } from "../../middleware/auth";
 
@@ -31,7 +37,7 @@ export const createCompany = async (
     const name = rawName || companyName;
 
 
-    const newCompany = await CompanyModel.create({
+    const newCompany = await createData(CompanyModel, {
       userId: req.user._id,
       name,
       gstNumber,
@@ -94,8 +100,7 @@ export const getAllCompanies = async (
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limitNum),
-
-      CompanyModel.countDocuments(filter),
+      countData(CompanyModel, filter),
     ]);
 
     return res
@@ -138,7 +143,7 @@ export const getSingleCompany = async (req: AuthRequest, res: Response) => {
       filter.userId = req.user._id;
     }
 
-    const company = await CompanyModel.findOne(filter);
+    const company = await getFirstMatch(CompanyModel, filter);
 
     if (!company) {
       return res.status(StatusCode.NOT_FOUND).json({
@@ -224,7 +229,8 @@ export const deleteCompany = async (req: AuthRequest, res: Response) => {
       filter.userId = req.user._id;
     }
 
-    const company = await CompanyModel.findOneAndUpdate(
+    const company = await updateData(
+      CompanyModel,
       filter,
       { isDeleted: true },
       { new: true }

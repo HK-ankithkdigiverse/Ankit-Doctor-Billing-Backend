@@ -1,8 +1,8 @@
 import User from "../../database/models/auth";
-import { Request, Response } from "express";
+import { Response } from "express";
 import { ApiResponse, StatusCode } from "../../common";
 import {AuthRequest} from "../../middleware/auth"
-import { responseMessage } from "../../helper";
+import { countData, responseMessage } from "../../helper";
 /* ===================== USER ===================== */
 
 // GET PROFILE (USER + ADMIN)
@@ -157,7 +157,7 @@ export const getAllUsers = async (req: AuthRequest, res: Response) => {
         .skip(skip)
         .limit(Number(limit)),
 
-      User.countDocuments(filter),
+      countData(User, filter),
     ]);
 
     return res

@@ -1,7 +1,7 @@
 import User from "../../database/models/auth";
 import Otp from "../../database/models/otp";
 import { Request, Response } from "express";
-import { email_verification_mail } from "../../helper";
+import { createData, email_verification_mail, getFirstMatch, updateData } from "../../helper";
 import { ApiResponse, StatusCode } from "../../common";
 import { responseMessage } from "../../helper/";
 import { generateToken } from "../../helper/jwt";
@@ -100,7 +100,7 @@ export const adminCreateUser = async (req: AuthRequest, res: Response) => {
     // Normalize email
     const normalizedEmail = email.toLowerCase().trim();
 
-    const existingUser = await User.findOne({ email: normalizedEmail });
+    const existingUser = await getFirstMatch(User, { email: normalizedEmail });
     if (existingUser) {
       return res
         .status(StatusCode.BAD_REQUEST)
@@ -109,7 +109,7 @@ export const adminCreateUser = async (req: AuthRequest, res: Response) => {
 
     const hashPassword = await bcrypt.hash(password, 12);
 
-    const user = await User.create({
+    const user: any = await createData(User, {
       name: name.trim(),
       medicalName: medicalName.trim(),
       email: normalizedEmail,
@@ -145,7 +145,7 @@ export const login = async (req: Request, res: Response) => {
     const { email, password } = req.body as LoginBody;
     const normalizedEmail = email.toLowerCase().trim();
 
-    const user = await User.findOne({ email: normalizedEmail });
+    const user = await getFirstMatch(User, { email: normalizedEmail });
     if (!user) {
       return res.status(StatusCode.BAD_REQUEST).json({
         ...ApiResponse.error(
@@ -176,7 +176,7 @@ export const login = async (req: Request, res: Response) => {
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
     await Otp.deleteMany({ email: normalizedEmail });
-    await Otp.create({
+    await createData(Otp, {
       email: normalizedEmail,
       otp,
       expireAt: new Date(Date.now() + 5 * 60 * 1000),
@@ -205,7 +205,7 @@ export const verifyOtp = async (req: Request, res: Response) => {
     const { email, otp } = req.body as VerifyOtpBody;
     const normalizedEmail = email.toLowerCase().trim();
 
-    const otpRecord = await Otp.findOne({ email: normalizedEmail, otp });
+    const otpRecord = await getFirstMatch(Otp, { email: normalizedEmail, otp });
     if (!otpRecord || otpRecord.expireAt < new Date()) {
       return res
         .status(StatusCode.BAD_REQUEST)
@@ -214,7 +214,7 @@ export const verifyOtp = async (req: Request, res: Response) => {
 
     await Otp.deleteMany({ email: normalizedEmail });
 
-    const user = await User.findOne({ email: normalizedEmail });
+    const user = await getFirstMatch(User, { email: normalizedEmail });
     if (!user) {
       return res
         .status(StatusCode.BAD_REQUEST)
@@ -287,7 +287,7 @@ export const forgotPassword = async (req: Request, res: Response) => {
     const { email } = req.body as ForgotPasswordBody;
     const normalizedEmail = email.toLowerCase().trim();
 
-    const user = await User.findOne({ email: normalizedEmail });
+    const user = await getFirstMatch(User, { email: normalizedEmail });
     if (!user) {
       return res
         .status(StatusCode.NOT_FOUND)
@@ -297,7 +297,7 @@ export const forgotPassword = async (req: Request, res: Response) => {
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
     await Otp.deleteMany({ email: normalizedEmail });
-    await Otp.create({
+    await createData(Otp, {
       email: normalizedEmail,
       otp,
       expireAt: new Date(Date.now() + 5 * 60 * 1000),
@@ -324,7 +324,7 @@ export const resetPassword = async (req: Request, res: Response) => {
     const { email, otp, newPassword } = req.body as ResetPasswordBody;
     const normalizedEmail = email.toLowerCase().trim();
 
-    const otpRecord = await Otp.findOne({ email: normalizedEmail, otp });
+    const otpRecord = await getFirstMatch(Otp, { email: normalizedEmail, otp });
     if (!otpRecord || otpRecord.expireAt < new Date()) {
       return res
         .status(StatusCode.BAD_REQUEST)
@@ -333,7 +333,8 @@ export const resetPassword = async (req: Request, res: Response) => {
 
     const hashedPassword = await bcrypt.hash(newPassword, 12);
 
-    await User.findOneAndUpdate(
+    await updateData(
+      User,
       { email: normalizedEmail },
       { password: hashedPassword }
     );
