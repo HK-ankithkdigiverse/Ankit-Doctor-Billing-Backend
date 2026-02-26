@@ -59,7 +59,6 @@ export const adminCreateUser = async (req: AuthRequest, res: Response) => {
     const {
       name,
       medicalName,
-      ownerName,
       email,
       password,
       phone,
@@ -78,7 +77,6 @@ export const adminCreateUser = async (req: AuthRequest, res: Response) => {
       !email ||
       !password ||
       !medicalName ||
-      !ownerName ||
       !address ||
       !state ||
       !city ||
@@ -112,7 +110,7 @@ export const adminCreateUser = async (req: AuthRequest, res: Response) => {
     const hashPassword = await bcrypt.hash(password, 12);
 
     const user = await User.create({
-      name: (name || ownerName).trim(),
+      name: (name).trim(),
       medicalName: medicalName.trim(),
       email: normalizedEmail,
       password: hashPassword,

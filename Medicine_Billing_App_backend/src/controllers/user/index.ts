@@ -33,7 +33,6 @@ export const updateUser = async (req: AuthRequest, res: Response) => {
     const {
       name,
       medicalName,
-      ownerName,
       email,
       phone,
       address,
@@ -48,7 +47,6 @@ export const updateUser = async (req: AuthRequest, res: Response) => {
 
     if (name !== undefined) updatePayload.name = name;
     if (medicalName !== undefined) updatePayload.medicalName = medicalName;
-    if (ownerName !== undefined && name === undefined) updatePayload.name = ownerName;
     if (email !== undefined) updatePayload.email = email;
     if (phone !== undefined) updatePayload.phone = phone;
     if (address !== undefined) updatePayload.address = address;
