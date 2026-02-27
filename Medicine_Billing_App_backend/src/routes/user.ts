@@ -31,4 +31,4 @@ router.post("/", authMiddleware, allowRoles("ADMIN"), validate(createUserSchema)
 router.put("/:id", authMiddleware, allowRoles("ADMIN"), validate(idParamSchema, "params"), validate(updateUserSchema), adminUpdateUser);
 router.delete("/:id", authMiddleware, allowRoles("ADMIN"), validate(idParamSchema, "params"), deleteUser);
 
-export default router;
+export const userRouter = router;

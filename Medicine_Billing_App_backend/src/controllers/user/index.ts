@@ -1,28 +1,23 @@
 import User from "../../database/models/auth";
 import { Response } from "express";
-import { ApiResponse, StatusCode } from "../../common";
+import { StatusCode } from "../../common";
 import {AuthRequest} from "../../middleware/auth"
-import { countData, responseMessage } from "../../helper";
-/* ===================== USER ===================== */
+import { applySearchFilter, countData, getPagination, responseMessage, sendError, sendNotFound, sendSuccess } from "../../helper";
 
 // GET PROFILE (USER + ADMIN)
 export const getProfile = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user._id;
 
-    const user = await User.findById(userId).select("-password");
+    const user = await User.findById(userId).select("-password").lean();
 
     if (!user) {
-      return res
-        .status(StatusCode.NOT_FOUND)
-        .json(ApiResponse.error(responseMessage.getDataNotFound("User"), null, StatusCode.NOT_FOUND));
+      return sendNotFound(res, responseMessage.getDataNotFound("User"));
     }
 
-    return res.status(StatusCode.OK).json(ApiResponse.success(responseMessage.loginSuccess, { user }));
+    return sendSuccess(res, responseMessage.loginSuccess, { user });
   } catch (error) {
-    return res
-      .status(StatusCode.INTERNAL_ERROR)
-      .json(ApiResponse.error(responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR));
+    return sendError(res, responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR);
   }
 };
 
@@ -30,24 +25,14 @@ export const getProfile = async (req: AuthRequest, res: Response) => {
 export const updateUser = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user._id;
-    const {
-      name,
-      medicalName,
-      email,
-      phone,
-      address,
-      state,
-      city,
-      pincode,
-      gstNumber,
-      panCardNumber,
-    } = req.body;
+    const {name,medicalName,email,signature,phone,address,state,city,pincode,gstNumber,panCardNumber,} = req.body;
 
     const updatePayload: Record<string, unknown> = {};
 
     if (name !== undefined) updatePayload.name = name;
     if (medicalName !== undefined) updatePayload.medicalName = medicalName;
     if (email !== undefined) updatePayload.email = email;
+    if (signature !== undefined) updatePayload.signature = signature;
     if (phone !== undefined) updatePayload.phone = phone;
     if (address !== undefined) updatePayload.address = address;
     if (state !== undefined) updatePayload.state = state;
@@ -60,21 +45,15 @@ export const updateUser = async (req: AuthRequest, res: Response) => {
       userId,
       updatePayload,
       { new: true }
-    ).select("-password");
+    ).select("-password").lean();
 
     if (!updatedUser) {
-      return res
-        .status(StatusCode.NOT_FOUND)
-        .json(ApiResponse.error(responseMessage.getDataNotFound("User"), null, StatusCode.NOT_FOUND));
+      return sendNotFound(res, responseMessage.getDataNotFound("User"));
     }
 
-    return res
-      .status(StatusCode.OK)
-      .json(ApiResponse.success(responseMessage.updateDataSuccess("Profile"), { user: updatedUser }));
+    return sendSuccess(res, responseMessage.updateDataSuccess("Profile"), { user: updatedUser });
   } catch (error) {
-    return res
-      .status(StatusCode.INTERNAL_ERROR)
-      .json(ApiResponse.error(responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR));
+    return sendError(res, responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR);
   }
 };
 
@@ -93,95 +72,75 @@ export const deleteUser = async (req: AuthRequest, res: Response) => {
     );
 
     if (!user) {
-      return res
-        .status(StatusCode.NOT_FOUND)
-        .json(ApiResponse.error(responseMessage.getDataNotFound("User"), null, StatusCode.NOT_FOUND));
+      return sendNotFound(res, responseMessage.getDataNotFound("User"));
     }
 
-    return res.status(StatusCode.OK).json(ApiResponse.success(responseMessage.deleteDataSuccess("User")));
+    return sendSuccess(res, responseMessage.deleteDataSuccess("User"));
   } catch (error) {
-    return res
-      .status(StatusCode.INTERNAL_ERROR)
-      .json(ApiResponse.error(responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR));
+    return sendError(res, responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR);
   }
 };
 
-
-/* ===================== ADMIN ===================== */
-
-// ADMIN → GET ALL USERS
+// ADMIN ? GET ALL USERS
 export const getAllUsers = async (req: AuthRequest, res: Response) => {
   try {
-    const { page = 1, limit = 10, search } = req.query;
+    const { pageNum, limitNum, skip, searchText } = getPagination(req.query, {
+      page: 1,
+      limit: 10,
+    });
 
     const filter: any = { isDeleted: false };
 
-    // 🔍 Search across user fields
-    const searchText = typeof search === "string" ? search.trim() : "";
     if (searchText) {
-      const escapedSearch = searchText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const searchRegex = new RegExp(escapedSearch, "i");
-      const orFilters: any[] = [
-        { name: { $regex: searchRegex } },
-        { medicalName: { $regex: searchRegex } },
-        { email: { $regex: searchRegex } },
-        { phone: { $regex: searchRegex } },
-        { address: { $regex: searchRegex } },
-        { state: { $regex: searchRegex } },
-        { city: { $regex: searchRegex } },
-        { pincode: { $regex: searchRegex } },
-        { gstNumber: { $regex: searchRegex } },
-        { panCardNumber: { $regex: searchRegex } },
-        { role: { $regex: searchRegex } },
-      ];
+      applySearchFilter(filter, searchText, [
+        "name",
+        "medicalName",
+        "email",
+        "phone",
+        "address",
+        "state",
+        "city",
+        "pincode",
+        "gstNumber",
+        "panCardNumber",
+        "role",
+      ]);
 
       const loweredSearch = searchText.toLowerCase();
       if (loweredSearch === "true" || loweredSearch === "false") {
-        orFilters.push({ isActive: loweredSearch === "true" });
+        filter.$or = [...(Array.isArray(filter.$or) ? filter.$or : []), { isActive: loweredSearch === "true" }];
       }
-
-      filter.$or = orFilters;
     }
 
-    // Exclude the requesting admin from the list
     if (req.user && req.user._id) {
       filter._id = { $ne: req.user._id };
     }
-
-    const skip = (Number(page) - 1) * Number(limit);
 
     const [users, total] = await Promise.all([
       User.find(filter)
         .select("-password")
         .sort({ createdAt: -1 })
         .skip(skip)
-        .limit(Number(limit)),
-
+        .limit(limitNum)
+        .lean(),
       countData(User, filter),
     ]);
 
-    return res
-      .status(StatusCode.OK)
-      .json(
-        ApiResponse.success("Users fetched successfully", {
-          users,
-          pagination: {
-            total,
-            page: Number(page),
-            limit: Number(limit),
-            totalPages: Math.ceil(total / Number(limit)),
-          },
-        })
-      );
+    return sendSuccess(res, "Users fetched successfully", {
+      users,
+      pagination: {
+        total,
+        page: pageNum,
+        limit: limitNum,
+        totalPages: Math.ceil(total / limitNum),
+      },
+    });
   } catch (error) {
-    return res
-      .status(StatusCode.INTERNAL_ERROR)
-      .json(ApiResponse.error(responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR));
+    return sendError(res, responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR);
   }
 };
 
-
-// ADMIN → UPDATE ANY USER
+// ADMIN ? UPDATE ANY USER
 export const adminUpdateUser = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
@@ -199,20 +158,14 @@ export const adminUpdateUser = async (req: AuthRequest, res: Response) => {
       id,
       payload,
       { new: true }
-    ).select("-password");
+    ).select("-password").lean();
 
     if (!user) {
-      return res
-        .status(StatusCode.NOT_FOUND)
-        .json(ApiResponse.error(responseMessage.getDataNotFound("User"), null, StatusCode.NOT_FOUND));
+      return sendNotFound(res, responseMessage.getDataNotFound("User"));
     }
 
-    return res
-      .status(StatusCode.OK)
-      .json(ApiResponse.success(responseMessage.updateDataSuccess("User"), { user }));
+    return sendSuccess(res, responseMessage.updateDataSuccess("User"), { user });
   } catch (error) {
-    return res
-      .status(StatusCode.INTERNAL_ERROR)
-      .json(ApiResponse.error(responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR));
+    return sendError(res, responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR);
   }
 };

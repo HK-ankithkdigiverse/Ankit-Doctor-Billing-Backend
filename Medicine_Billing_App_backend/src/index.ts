@@ -3,7 +3,7 @@ import express, { NextFunction, Request, Response } from 'express';
 import cors from 'cors';
 import apiRoutes from "./routes";
 import cookieParser from "cookie-parser";
-import { uploadDir } from "./common/uploadPath";
+import { sharedUploadDir } from "./common/uploadPath";
 import { handleUploadError } from "./middleware/upload";
 
 const app = express();
@@ -19,7 +19,7 @@ app.use((req, res, next) => {
 });
 
 app.use("/api", apiRoutes);
-app.use("/uploads", express.static(uploadDir));
+app.use("/uploads", express.static(sharedUploadDir));
 
 app.get('/isServerUp', (req, res) => {
   res.send('Server is running ');

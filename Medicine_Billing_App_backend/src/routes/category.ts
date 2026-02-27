@@ -18,7 +18,7 @@ import {
 
 const router = Router();
 
-// All category routes require authentication
+
 router.use(authMiddleware);
 
 router.post("/", validate(createCategorySchema), createCategory);
@@ -28,4 +28,4 @@ router.get("/:id", validate(categoryIdParamSchema, "params"), getCategoryById);
 router.put("/:id", validate(categoryIdParamSchema, "params"), validate(updateCategorySchema), updateCategory);
 router.delete("/:id", validate(categoryIdParamSchema, "params"), deleteCategory);
 
-export default router;
+export const categoryRouter = router;

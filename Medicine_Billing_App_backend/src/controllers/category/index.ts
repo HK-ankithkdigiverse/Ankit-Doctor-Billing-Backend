@@ -1,15 +1,6 @@
 import { Response } from "express";
-import mongoose from "mongoose";
 import { CategoryModel } from "../../database/models/category";
-import {
-  countData,
-  createData,
-  findAllWithPopulate,
-  findOneAndPopulate,
-  getDataWithSorting,
-  getFirstMatch,
-  responseMessage,
-} from "../../helper";
+import {applySearchFilter,countData,createData,getFirstMatch,getPagination,responseMessage,sendError,sendNotFound,sendSuccess,sendUnauthorized,} from "../../helper";
 import { StatusCode } from "../../common";
 import { AuthRequest } from "../../middleware/auth";
 
@@ -28,7 +19,7 @@ const mapCategoryItem = (category: any) => ({
   isDeleted: category.isDeleted,
   createdBy: category.createdBy,
   createdAt: category.createdAt,
-  updatedAt: category.updatedAt,
+updatedAt: category.updatedAt,
 });
 
 const getCategoryFilter = (req: AuthRequest) => {
@@ -41,56 +32,26 @@ const getCategoryFilter = (req: AuthRequest) => {
   return filter;
 };
 
-const getAccessibleCategories = async (req: AuthRequest) => {
-  const filter = getCategoryFilter(req);
-
-  if (req.user?.role === "ADMIN") {
-    return findAllWithPopulate(
-      CategoryModel,
-      filter,
-      undefined,
-      undefined,
-      { path: "createdBy", select: "name email role" }
-    );
-  }
-
-  return findAllWithPopulate(
-    CategoryModel,
-    filter,
-    undefined,
-    undefined,
-    { path: "createdBy", select: "name email role" }
-  );
-};
-
 /* ================= CREATE CATEGORY ================= */
 export const createCategory = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
-      return res.status(StatusCode.UNAUTHORIZED).json({ message: "Unauthorized" });
+      return sendUnauthorized(res, "Unauthorized");
     }
 
     const { name, description } = req.body;
 
-    if (typeof name !== "string" || !name.trim()) {
-      return res
-        .status(StatusCode.BAD_REQUEST)
-        .json({ message: "Category name is required" });
-    }
-
     const normalizedName = normalizeCategoryName(name);
     const normalizedDescription = normalizeCategoryDescription(description);
 
-    const existing = await findOneAndPopulate(CategoryModel, {
+    const existing = await getFirstMatch(CategoryModel, {
       createdBy: req.user._id,
       name: normalizedName,
       isDeleted: false,
-    }, undefined, undefined, { path: "createdBy", select: "name email role" });
+    });
 
     if (existing) {
-      return res
-        .status(StatusCode.BAD_REQUEST)
-        .json({ message: "Category already exists" });
+      return sendError(res, responseMessage.categoryAlreadyExists, null, StatusCode.BAD_REQUEST);
     }
 
     const createdCategory: any = await createData(CategoryModel, {
@@ -102,45 +63,37 @@ export const createCategory = async (req: AuthRequest, res: Response) => {
 
     await createdCategory.populate("createdBy", "name email role");
 
-    return res.status(StatusCode.CREATED).json({
-      message: responseMessage.addDataSuccess("Category"),
+    return sendSuccess(res, responseMessage.addDataSuccess("Category"), {
       category: mapCategoryItem(createdCategory),
     });
   } catch (error) {
     console.error("CREATE CATEGORY ERROR", error);
-    return res.status(StatusCode.INTERNAL_ERROR).json({
-      message: responseMessage.internalServerError,
-    });
+    return sendError(res, responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR);
   }
 };
 
 /* ================= GET ALL CATEGORIES ================= */
 export const getCategories = async (req: AuthRequest, res: Response) => {
   try {
-    const { search, page = 1, limit = 10 } = req.query;
-    const searchText = typeof search === "string" ? search.trim().toLowerCase() : "";
-    const pageNum = Math.max(1, Number(page) || 1);
-    const limitNum = Math.max(1, Number(limit) || 10);
+    const { pageNum, limitNum, skip, searchText } = getPagination(req.query, {
+      page: 1,
+      limit: 10,
+    });
 
     const filter: any = getCategoryFilter(req);
-
-    if (searchText) {
-      filter.$or = [
-        { name: { $regex: searchText, $options: "i" } },
-        { description: { $regex: searchText, $options: "i" } },
-      ];
-    }
+    applySearchFilter(filter, searchText, ["name", "description"]);
 
     const [categories, total] = await Promise.all([
       CategoryModel.find(filter)
         .populate("createdBy", "name email role")
         .sort({ createdAt: -1 })
-        .skip((pageNum - 1) * limitNum)
-        .limit(limitNum),
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
       countData(CategoryModel, filter),
     ]);
 
-    return res.status(StatusCode.OK).json({
+    return sendSuccess(res, "Categories fetched successfully", {
       categories: categories.map(mapCategoryItem),
       pagination: {
         total,
@@ -151,9 +104,7 @@ export const getCategories = async (req: AuthRequest, res: Response) => {
     });
   } catch (error) {
     console.error("GET CATEGORIES ERROR", error);
-    return res.status(StatusCode.INTERNAL_ERROR).json({
-      message: responseMessage.internalServerError,
-    });
+    return sendError(res, responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR);
   }
 };
 
@@ -162,37 +113,23 @@ export const getCategoryById = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(StatusCode.BAD_REQUEST).json({
-        message: "Invalid category id",
-      });
-    }
-
     const filter: any = { _id: id, isDeleted: false };
     if (req.user?.role !== "ADMIN") {
       filter.createdBy = req.user?._id;
     }
 
-    const category = await findOneAndPopulate(
-      CategoryModel,
-      filter,
-      undefined,
-      undefined,
-      { path: "createdBy", select: "name email role" }
-    );
+    const category = await CategoryModel.findOne(filter)
+      .populate("createdBy", "name email role")
+      .lean();
 
     if (!category) {
-      return res.status(StatusCode.NOT_FOUND).json({
-        message: responseMessage.getDataNotFound("Category"),
-      });
+      return sendNotFound(res, responseMessage.getDataNotFound("Category"));
     }
 
-    return res.status(StatusCode.OK).json(mapCategoryItem(category));
+    return sendSuccess(res, "Category fetched successfully", mapCategoryItem(category));
   } catch (error) {
     console.error("GET CATEGORY BY ID ERROR", error);
-    return res.status(StatusCode.INTERNAL_ERROR).json({
-      message: responseMessage.internalServerError,
-    });
+    return sendError(res, responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR);
   }
 };
 
@@ -202,35 +139,18 @@ export const updateCategory = async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     const { name, description } = req.body;
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(StatusCode.BAD_REQUEST).json({
-        message: "Invalid category id",
-      });
-    }
-
     const filter: any = { _id: id, isDeleted: false };
     if (req.user?.role !== "ADMIN") {
       filter.createdBy = req.user?._id;
     }
 
-    const category = await CategoryModel.findOne(filter).populate(
-      "createdBy",
-      "name email role"
-    );
+    const category = await CategoryModel.findOne(filter);
 
     if (!category) {
-      return res.status(StatusCode.NOT_FOUND).json({
-        message: responseMessage.getDataNotFound("Category"),
-      });
+      return sendNotFound(res, responseMessage.getDataNotFound("Category"));
     }
 
     if (name !== undefined) {
-      if (typeof name !== "string" || !name.trim()) {
-        return res
-          .status(StatusCode.BAD_REQUEST)
-          .json({ message: "Category name is required" });
-      }
-
       const normalizedName = normalizeCategoryName(name);
       const duplicate = await getFirstMatch(CategoryModel, {
         _id: { $ne: id },
@@ -240,9 +160,7 @@ export const updateCategory = async (req: AuthRequest, res: Response) => {
       });
 
       if (duplicate) {
-        return res.status(StatusCode.BAD_REQUEST).json({
-          message: "Category name already exists",
-        });
+        return sendError(res, responseMessage.categoryNameAlreadyExists, null, StatusCode.BAD_REQUEST);
       }
 
       category.name = normalizedName;
@@ -255,15 +173,12 @@ export const updateCategory = async (req: AuthRequest, res: Response) => {
     await category.save();
     await category.populate("createdBy", "name email role");
 
-    return res.status(StatusCode.OK).json({
-      message: responseMessage.updateDataSuccess("Category"),
+    return sendSuccess(res, responseMessage.updateDataSuccess("Category"), {
       category: mapCategoryItem(category),
     });
   } catch (error) {
     console.error("UPDATE CATEGORY ERROR", error);
-    return res.status(StatusCode.INTERNAL_ERROR).json({
-      message: responseMessage.internalServerError,
-    });
+    return sendError(res, responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR);
   }
 };
 
@@ -272,39 +187,27 @@ export const deleteCategory = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(StatusCode.BAD_REQUEST).json({
-        message: "Invalid category id",
-      });
-    }
-
     const filter: any = { _id: id, isDeleted: false };
     if (req.user?.role !== "ADMIN") {
       filter.createdBy = req.user?._id;
     }
 
-    const category = await CategoryModel.findOne(filter);
+    const category = await CategoryModel.findOneAndUpdate(
+      filter,
+      { $set: { isDeleted: true } },
+      { new: true }
+    );
     if (!category) {
-      return res.status(StatusCode.NOT_FOUND).json({
-        message: responseMessage.getDataNotFound("Category"),
-      });
+      return sendNotFound(res, responseMessage.getDataNotFound("Category"));
     }
 
-    category.isDeleted = true;
-    await category.save();
-
-    return res.status(StatusCode.OK).json({
-      message: responseMessage.deleteDataSuccess("Category"),
-    });
+    return sendSuccess(res, responseMessage.deleteDataSuccess("Category"));
   } catch (error) {
     console.error("DELETE CATEGORY ERROR", error);
-    return res.status(StatusCode.INTERNAL_ERROR).json({
-      message: responseMessage.internalServerError,
-    });
+    return sendError(res, responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR);
   }
 };
 
-/* ================= GET ALL ACTIVE CATEGORIES (for dropdowns) ================= */
 export const getActiveCategoriesForDropdown = async (
   req: AuthRequest,
   res: Response
@@ -313,18 +216,15 @@ export const getActiveCategoriesForDropdown = async (
     const filter: any = getCategoryFilter(req);
     filter.isActive = true;
 
-    const categories = (await getDataWithSorting(CategoryModel, filter, undefined, { sort: { name: 1 } }))
+    const categories = (await CategoryModel.find(filter).select("_id name").sort({ name: 1 }).lean())
       .map((cat: any) => ({
         _id: cat._id,
         name: safeText(cat.name),
-      }))
-      .sort((a: any, b: any) => a.name.localeCompare(b.name));
+      }));
 
-    return res.status(StatusCode.OK).json(categories);
+    return sendSuccess(res, "Categories fetched successfully", { categories });
   } catch (error) {
     console.error("GET CATEGORY DROPDOWN ERROR", error);
-    return res.status(StatusCode.INTERNAL_ERROR).json({
-      message: responseMessage.internalServerError,
-    });
+    return sendError(res, responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR);
   }
 };

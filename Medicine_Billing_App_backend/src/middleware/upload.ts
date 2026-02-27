@@ -2,17 +2,17 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { Request, Response, NextFunction } from "express";
-import { uploadDir } from "../common/uploadPath";
+import { ApiResponse } from "../common";
+import { sharedUploadDir } from "../common/uploadPath";
 
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
+if (!fs.existsSync(sharedUploadDir)) {
+  fs.mkdirSync(sharedUploadDir, { recursive: true });
 }
 
 const allowedTypes = [
   "image/jpeg",
   "image/jpg",
   "image/png",
-  "image/webp",
   "application/pdf",
 ];
 
@@ -24,13 +24,13 @@ const fileFilter = (
   if (allowedTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error("Invalid file type. Allowed: jpeg, jpg, png, webp, pdf"));
+    cb(new Error("Invalid file type. Only JPEG, JPG, PNG and PDF are allowed."));
   }
 };
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, uploadDir);
+    cb(null, sharedUploadDir);
   },
   filename: function (req, file, cb) {
     const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
@@ -46,19 +46,11 @@ export const upload = multer({
 
 export const handleUploadError = (err: any, req: Request, res: Response, next: NextFunction) => {
   if (err instanceof multer.MulterError) {
-    return res.status(400).json({
-      status: 400,
-      message: err.message,
-      data: null,
-    });
+    return res.status(400).json(ApiResponse.error(err.message, null, 400));
   }
 
   if (err) {
-    return res.status(400).json({
-      status: 400,
-      message: err.message || "Upload failed",
-      data: null,
-    });
+    return res.status(400).json(ApiResponse.error(err.message || "Upload failed", null, 400));
   }
 
   next();

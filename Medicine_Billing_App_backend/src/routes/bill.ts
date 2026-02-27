@@ -19,4 +19,4 @@ router.get("/:id", validate(billIdParamSchema, "params"), getBillById);
 router.put("/:id", validate(billIdParamSchema, "params"), validate(updateBillSchema), updateBill);
 router.delete("/:id", validate(billIdParamSchema, "params"), deleteBill);
 
-export default router;
+export const billRouter = router;

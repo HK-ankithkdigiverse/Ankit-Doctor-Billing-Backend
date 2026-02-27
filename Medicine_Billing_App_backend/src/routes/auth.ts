@@ -14,4 +14,4 @@ router.post("/logout",authMiddleware,logout)
 
 
 
-export default router
+export const authRouter = router

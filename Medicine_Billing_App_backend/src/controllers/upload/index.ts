@@ -1,19 +1,11 @@
 import { StatusCode } from "../../common";
 import path from "path";
 import fs from "fs/promises";
-import { existsSync } from "fs";
 import { getFilesValidator } from "../../validation";
-import { uploadDir } from "../../common/uploadPath";
+import { sharedUploadDir } from "../../common/uploadPath";
 import { Request, Response } from "express";
-
-type UploadedFilesRequest = Request & {
-  files?: Express.Multer.File[];
-};
-
-type DeleteImageRequestBody = {
-  url?: string;
-  filename?: string;
-};
+import { sendError, sendSuccess } from "../../helper";
+import { DeleteImageRequestBody, UploadedFilesRequest } from "../../types/upload";
 
 // ================= UPLOAD IMAGES =================
 export const uploadImages = async (req: UploadedFilesRequest, res: Response) => {
@@ -27,22 +19,12 @@ export const uploadImages = async (req: UploadedFilesRequest, res: Response) => 
 
     const files = req.files;
 
-    const fileUrls = files.map((file) => ({
-      filename: file.filename,
-      url: `/uploads/${file.filename}`,
-    }));
+    const fileUrls = files.map((file: Express.Multer.File) => `uploads/${file.filename}`);
 
-    return res.status(StatusCode.OK).json({
-      success: true,
-      message: "Files uploaded successfully",
-      data: fileUrls,
-    });
+    return sendSuccess(res, "Files uploaded successfully.", { files: fileUrls });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Upload failed";
-    return res.status(StatusCode.INTERNAL_ERROR).json({
-      success: false,
-      message,
-    });
+    return sendError(res, message, error, StatusCode.INTERNAL_ERROR);
   }
 };
 
@@ -58,62 +40,42 @@ export const getImages = async (req: Request, res: Response) => {
     }
 
     const { page = 1, limit = 10, type } = value;
-    const directoryPath = uploadDir;
-
+    const skip = (page - 1) * limit;
     let files: string[] = [];
     try {
-      files = await fs.readdir(directoryPath);
+      const dirEntries = await fs.readdir(sharedUploadDir, { withFileTypes: true });
+      files = dirEntries.filter((entry) => entry.isFile()).map((entry) => entry.name);
     } catch {
       files = [];
     }
 
-    // Filter by file type
     if (type === "image") {
       files = files.filter(
         (file) =>
           file.endsWith(".jpg") ||
           file.endsWith(".jpeg") ||
-          file.endsWith(".png") ||
-          file.endsWith(".webp")
+          file.endsWith(".png")
       );
-    }
-
-    if (type === "pdf") {
+    } else if (type === "pdf") {
       files = files.filter((file) => file.endsWith(".pdf"));
     }
 
-    // Keep only actual files
-    const fileNames = files.filter((file) => {
-      const fullPath = path.join(directoryPath, file);
-      return existsSync(fullPath);
-    });
-
-    const totalData = fileNames.length;
+    const totalData = files.length;
     const totalPages = Math.ceil(totalData / limit);
-    const skip = (page - 1) * limit;
+    const paginatedFiles = limit ? files.slice(skip, skip + limit) : files;
 
-    const paginatedFiles = fileNames.slice(skip, skip + limit);
-
-    return res.status(StatusCode.OK).json({
-      success: true,
-      message: "Files fetched successfully",
-      data: paginatedFiles.map((file) => ({
-        filename: file,
-        url: `/uploads/${file}`,
-      })),
-      pagination: {
+    return sendSuccess(res, "Files fetched successfully.", {
+      files: paginatedFiles.map((file) => `uploads/${file}`),
+      state: {
         page,
         limit,
         totalPages,
-        totalData,
       },
+      totalData,
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to fetch files";
-    return res.status(StatusCode.INTERNAL_ERROR).json({
-      success: false,
-      message,
-    });
+    return sendError(res, message, error, StatusCode.INTERNAL_ERROR);
   }
 };
 
@@ -125,7 +87,7 @@ export const deleteImage = async (req: Request<unknown, unknown, DeleteImageRequ
     if (!url && !filename) {
       return res.status(StatusCode.BAD_REQUEST).json({
         success: false,
-        message: "Provide 'url' or 'filename' to delete",
+        message: "Please provide 'url' or 'filename' to delete.",
       });
     }
 
@@ -144,9 +106,11 @@ export const deleteImage = async (req: Request<unknown, unknown, DeleteImageRequ
     }
 
     const safeFilename = path.basename(fileToDelete);
-    const filePath = path.join(uploadDir, safeFilename);
+    const filePath = path.join(sharedUploadDir, safeFilename);
 
-    if (!existsSync(filePath)) {
+    try {
+      await fs.access(filePath);
+    } catch {
       return res.status(StatusCode.NOT_FOUND).json({
         success: false,
         message: "File not found",
@@ -155,15 +119,9 @@ export const deleteImage = async (req: Request<unknown, unknown, DeleteImageRequ
 
     await fs.unlink(filePath);
 
-    return res.status(StatusCode.OK).json({
-      success: true,
-      message: "File deleted successfully",
-    });
+    return sendSuccess(res, "File deleted successfully.");
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to delete file";
-    return res.status(StatusCode.INTERNAL_ERROR).json({
-      success: false,
-      message,
-    });
+    return sendError(res, message, error, StatusCode.INTERNAL_ERROR);
   }
 };

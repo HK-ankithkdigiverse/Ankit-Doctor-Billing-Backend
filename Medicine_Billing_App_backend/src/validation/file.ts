@@ -1,19 +1,15 @@
 import Joi from "joi";
+import { limit100Schema, pageSchema } from "./common";
 
 export const getFilesValidator = Joi.object({
-  page: Joi.number()
-    .integer()
-    .min(1)
+  page: pageSchema
     .default(1)
     .messages({
       "number.base": "Page must be a number",
       "number.min": "Page must be at least 1",
     }),
 
-  limit: Joi.number()
-    .integer()
-    .min(1)
-    .max(100)
+  limit: limit100Schema
     .default(10)
     .messages({
       "number.base": "Limit must be a number",

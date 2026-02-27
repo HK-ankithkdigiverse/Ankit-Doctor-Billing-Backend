@@ -1,11 +1,6 @@
 import { Response } from "express";
 import { Product } from "../../database/models/product";
-import {
-  countData,
-  createData,
-  findOneAndPopulate,
-  responseMessage,
-} from "../../helper";
+import {applySearchFilter,countData,createData,findOneAndPopulate,getPagination,responseMessage,sendError,sendNotFound,sendSuccess,sendUnauthorized,} from "../../helper";
 import { ApiResponse, StatusCode } from "../../common";
 import { AuthRequest } from "../../middleware/auth";
 import mongoose from "mongoose";
@@ -14,18 +9,10 @@ import mongoose from "mongoose";
 export const createProduct = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
-      return res
-        .status(StatusCode.UNAUTHORIZED)
-        .json(ApiResponse.error(responseMessage.accessDenied, null, StatusCode.UNAUTHORIZED));
+      return sendUnauthorized(res, responseMessage.accessDenied);
     }
 
     const { companyId } = req.body;
-
-    if (!companyId) {
-      return res
-        .status(StatusCode.BAD_REQUEST)
-        .json(ApiResponse.error(responseMessage.validationError("company"), null, StatusCode.BAD_REQUEST));
-    }
 
     const product = await createData(Product, {
       ...req.body,
@@ -34,13 +21,9 @@ export const createProduct = async (req: AuthRequest, res: Response) => {
       isDeleted: false,
     });
 
-    return res
-      .status(StatusCode.CREATED)
-      .json(ApiResponse.created(responseMessage.addDataSuccess("Product"), { product }));
+    return res.status(StatusCode.CREATED).json(ApiResponse.created(responseMessage.addDataSuccess("Product"), { product }));
   } catch (error) {
-    return res
-      .status(StatusCode.INTERNAL_ERROR)
-      .json(ApiResponse.error(responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR));
+    return sendError(res, responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR);
   }
 };
 
@@ -48,12 +31,6 @@ export const createProduct = async (req: AuthRequest, res: Response) => {
 export const getProductById = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(StatusCode.BAD_REQUEST).json({
-        message: "Invalid product id",
-      });
-    }
 
     const filter: any = {
       _id: id,
@@ -77,16 +54,12 @@ export const getProductById = async (req: AuthRequest, res: Response) => {
     );
 
     if (!product) {
-      return res.status(StatusCode.NOT_FOUND).json({
-        message: responseMessage.getDataNotFound("Product"),
-      });
+      return sendNotFound(res, responseMessage.getDataNotFound("Product"));
     }
 
-    return res.status(StatusCode.OK).json(ApiResponse.success("Product fetched successfully", { product }));
+    return sendSuccess(res, "Product fetched successfully", { product });
   } catch (error) {
-    return res
-      .status(StatusCode.INTERNAL_ERROR)
-      .json(ApiResponse.error(responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR));
+    return sendError(res, responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR);
   }
 };
 
@@ -98,9 +71,13 @@ export const getProducts = async (req: AuthRequest, res: Response) => {
       productType,
       companyId,
       search,
-      page = 1,
-      limit = 10,
+      page,
+      limit,
     } = req.query;
+    const { pageNum, limitNum, skip, searchText } = getPagination(
+      { page, limit, search },
+      { page: 1, limit: 10 },
+    );
 
     const filter: any = { isDeleted: false };
 
@@ -113,13 +90,7 @@ export const getProducts = async (req: AuthRequest, res: Response) => {
     }
 
     // 🔍 SEARCH (name, category, productType)
-    if (search) {
-      filter.$or = [
-        { name: { $regex: search, $options: "i" } },
-        { category: { $regex: search, $options: "i" } },
-        { productType: { $regex: search, $options: "i" } },
-      ];
-    }
+    applySearchFilter(filter, searchText, ["name", "category", "productType"]);
 
     // 🔐 USER restriction
     if (req.user?.role !== "ADMIN") {
@@ -127,21 +98,18 @@ export const getProducts = async (req: AuthRequest, res: Response) => {
     }
 
     // 📄 Pagination
-    const pageNum = Number(page);
-    const limitNum = Number(limit);
-    const skip = (pageNum - 1) * limitNum;
-
     const [products, total] = await Promise.all([
       Product.find(filter)
         .populate("companyId", "name companyName")
         .populate("createdBy", "name email role")
         .sort({ createdAt: -1 })
         .skip(skip)
-        .limit(limitNum),
+        .limit(limitNum)
+        .lean(),
       countData(Product, filter),
     ]);
 
-    return res.status(StatusCode.OK).json({
+    return sendSuccess(res, "Products fetched successfully", {
       products,
       pagination: {
         total,
@@ -151,9 +119,7 @@ export const getProducts = async (req: AuthRequest, res: Response) => {
       },
     });
   } catch (error) {
-    return res.status(StatusCode.INTERNAL_ERROR).json({
-      message: responseMessage.internalServerError,
-    });
+    return sendError(res, responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR);
   }
 };
 
@@ -161,53 +127,43 @@ export const getProducts = async (req: AuthRequest, res: Response) => {
 /* ================= UPDATE PRODUCT ================= */
 export const updateProduct = async (req: AuthRequest, res: Response) => {
   try {
-    const product = await Product.findById(req.params.id);
+    const product = await Product.findById(req.params.id).select("_id createdBy isDeleted").lean();
 
     if (!product || product.isDeleted) {
-      return res.status(StatusCode.NOT_FOUND).json({
-        message: responseMessage.getDataNotFound("Product"),
-      });
+      return sendNotFound(res, responseMessage.getDataNotFound("Product"));
     }
-
-    // 🔒 Permission check
     if (
       req.user?.role !== "ADMIN" &&
       product.createdBy.toString() !== req.user?._id.toString()
     ) {
-      return res.status(StatusCode.FORBIDDEN).json({
-        message: "Not authorized",
-      });
+      return sendError(res, responseMessage.notAuthorized, null, StatusCode.FORBIDDEN);
     }
 
-    // ❌ USER cannot change company
+    const payload = { ...req.body };
     if (req.user?.role !== "ADMIN") {
-      delete req.body.companyId;
-      delete req.body.createdBy;
+      delete payload.companyId;
+      delete payload.createdBy;
     }
 
-    Object.assign(product, req.body);
-    await product.save();
+    const updatedProduct = await Product.findByIdAndUpdate(
+      req.params.id,
+      { $set: payload },
+      { new: true }
+    ).lean();
 
-    return res.status(StatusCode.OK).json({
-      message: responseMessage.updateDataSuccess("Product"),
-      product,
-    });
+    return sendSuccess(res, responseMessage.updateDataSuccess("Product"), { product: updatedProduct });
   } catch (error) {
-    return res.status(StatusCode.INTERNAL_ERROR).json({
-      message: responseMessage.internalServerError,
-    });
+    return sendError(res, responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR);
   }
 };
 
 /* ================= SOFT DELETE PRODUCT ================= */
 export const deleteProduct = async (req: AuthRequest, res: Response) => {
   try {
-    const product = await Product.findById(req.params.id);
+    const product = await Product.findById(req.params.id).select("_id createdBy isDeleted").lean();
 
     if (!product || product.isDeleted) {
-      return res.status(StatusCode.NOT_FOUND).json({
-        message: responseMessage.getDataNotFound("Product"),
-      });
+      return sendNotFound(res, responseMessage.getDataNotFound("Product"));
     }
 
     // 🔒 Permission check
@@ -215,21 +171,13 @@ export const deleteProduct = async (req: AuthRequest, res: Response) => {
       req.user?.role !== "ADMIN" &&
       product.createdBy.toString() !== req.user?._id.toString()
     ) {
-      return res.status(StatusCode.FORBIDDEN).json({
-        message: "Not authorized",
-      });
+      return sendError(res, responseMessage.notAuthorized, null, StatusCode.FORBIDDEN);
     }
 
-    product.isDeleted = true;
-    await product.save();
+    await Product.findByIdAndUpdate(req.params.id, { $set: { isDeleted: true } });
 
-    return res.status(StatusCode.OK).json({
-      message: responseMessage.deleteDataSuccess("Product"),
-    });
+    return sendSuccess(res, responseMessage.deleteDataSuccess("Product"));
   } catch (error) {
-    return res.status(StatusCode.INTERNAL_ERROR).json({
-      message: responseMessage.internalServerError,
-    });
+    return sendError(res, responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR);
   }
 };
-

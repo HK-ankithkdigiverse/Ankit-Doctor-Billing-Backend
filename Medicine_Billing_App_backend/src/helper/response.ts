@@ -16,9 +16,12 @@ export const responseMessage = {
 
   // COMPANY
   companyInactive: "This company is inactive!",
+  companyNotAvailableForSelectedUser: "Selected company is not available for this user.",
 
   // CATEGORY / TYPE
   categoryNotFound: "Category not found!",
+  categoryAlreadyExists: "Category already exists!",
+  categoryNameAlreadyExists: "Category name already exists!",
   typeNotFound: "Type not found!",
 
   // PRODUCT
@@ -32,6 +35,12 @@ export const responseMessage = {
 
   // COMMON
   internalServerError: "Something went wrong. Please try again later!",
+  notAuthorized: "Not authorized!",
+  fileNotFound: "File not found!",
+  noFilesUploaded: "No files uploaded!",
+  provideUrlOrFilename: "Provide 'url' or 'filename' to delete.",
+  invalidFilenameOrUrl: "Invalid filename/url.",
+  discountCannotExceedBillAmount: "Discount cannot exceed bill amount.",
 
   validationError: (field: string): string =>
     `${field.charAt(0).toUpperCase()}${field.slice(1)} is required!`,

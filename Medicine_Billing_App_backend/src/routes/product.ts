@@ -28,5 +28,5 @@ router.get("/:id", validate(productIdParamSchema, "params"), getProductById);
 
 router.delete("/:id", validate(productIdParamSchema, "params"), deleteProduct);
 
-export default router;
+export const productRouter = router;
 

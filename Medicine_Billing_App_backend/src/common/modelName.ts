@@ -5,5 +5,5 @@ export const MODEL = {
   OTP: "Otp",
   PRODUCT: "Product",
   BILL: "Bill",
-  BILL_ITEM: "BillItem"
+  BILL_ITEM: "BillItem",
 };

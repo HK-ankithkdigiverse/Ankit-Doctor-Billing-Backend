@@ -1,21 +1,21 @@
 import { Router } from "express";
-import authRoutes from "./auth";
-import uploadRoute from "./upload";
-import companyRoutes from "./company";
-import productRoutes from "./product";
-import billRoutes from "./bill";
-import userRoutes from "./user";
-import categoryRoutes from "./category";
+import {authRouter} from "./auth";
+import {uploadRouter} from "./upload";
+import {companyRouter} from "./company";
+import {productRouter} from "./product";
+import {billRouter} from "./bill";
+import {userRouter} from "./user";
+import {categoryRouter} from "./category";
 
 const router = Router();
 
-router.use("/auth", authRoutes);
-router.use("/upload", uploadRoute);
-router.use("/companies", companyRoutes);
-router.use("/products", productRoutes);
-router.use("/bills", billRoutes);
-router.use("/users", userRoutes);
-router.use("/categories", categoryRoutes);
+router.use("/auth", authRouter);
+router.use("/upload", uploadRouter);
+router.use("/companies", companyRouter);
+router.use("/products", productRouter);
+router.use("/bills", billRouter);
+router.use("/users", userRouter);
+router.use("/categories", categoryRouter);
 
 export default router;
 

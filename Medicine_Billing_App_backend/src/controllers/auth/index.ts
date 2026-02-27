@@ -1,101 +1,20 @@
 import User from "../../database/models/auth";
 import Otp from "../../database/models/otp";
 import { Request, Response } from "express";
-import { createData, email_verification_mail, getFirstMatch, updateData } from "../../helper";
-import { ApiResponse, StatusCode } from "../../common";
+import {createData,email_verification_mail,getFirstMatch,sendError,sendNotFound,sendSuccess,updateData} from "../../helper";
+import { ApiResponse, ROLE, StatusCode } from "../../common";
 import { responseMessage } from "../../helper/";
 import { generateToken } from "../../helper/jwt";
 import bcrypt from "bcryptjs";
 import {AuthRequest} from "../../middleware/auth"
-import { ROLE } from "../../common";
-
-interface AdminCreateUserBody {
-  name: string;
-  medicalName: string;
-  email: string;
-  password: string;
-  phone?: string;
-  address: string;
-  state: string;
-  city: string;
-  pincode: string;
-  gstNumber: string;
-  panCardNumber: string;
-  role?: ROLE;
-  isActive?: boolean;
-}
-
-interface LoginBody {
-  email: string;
-  password: string;
-}
-
-interface VerifyOtpBody {
-  email: string;
-  otp: string;
-}
-
-interface ChangePasswordBody {
-  oldPassword: string;
-  newPassword: string;
-}
-
-interface ForgotPasswordBody {
-  email: string;
-}
-
-interface ResetPasswordBody {
-  email: string;
-  otp: string;
-  newPassword: string;
-}
+import {AdminCreateUserBody,ChangePasswordBody,ForgotPasswordBody,LoginBody,ResetPasswordBody,VerifyOtpBody} from "../../types/auth";
 
 
 
 // ADMIN → CREATE USER
 export const adminCreateUser = async (req: AuthRequest, res: Response) => {
   try {
-    const {
-      name,
-      medicalName,
-      email,
-      password,
-      phone,
-      address,
-      state,
-      city,
-      pincode,
-      gstNumber,
-      panCardNumber,
-      role,
-      isActive,
-    } = req.body as AdminCreateUserBody;
-
-    // Validate required fields
-    if (
-      !email ||
-      !password ||
-      !name ||
-      !medicalName ||
-      !address ||
-      !state ||
-      !city ||
-      !pincode ||
-      !gstNumber ||
-      !panCardNumber
-    ) {
-      return res
-        .status(StatusCode.BAD_REQUEST)
-        .json(
-          ApiResponse.error(
-            responseMessage.validationError(
-              "name, email, password, medicalName, address, state, city, pincode, gstNumber and panCardNumber"
-            ),
-            null,
-            StatusCode.BAD_REQUEST
-          )
-        );
-    }
+    const {name,medicalName,email,password,signature,phone,address,state,city, pincode,gstNumber,panCardNumber,role,isActive,} = req.body as AdminCreateUserBody;
 
     // Normalize email
     const normalizedEmail = email.toLowerCase().trim();
@@ -114,6 +33,7 @@ export const adminCreateUser = async (req: AuthRequest, res: Response) => {
       medicalName: medicalName.trim(),
       email: normalizedEmail,
       password: hashPassword,
+      signature: signature?.trim() || "",
       phone,
       address: address.trim(),
       state: state.trim(),
@@ -125,17 +45,13 @@ export const adminCreateUser = async (req: AuthRequest, res: Response) => {
       isActive: typeof isActive === "boolean" ? isActive : true,
     });
 
-    // Return user without password
-    const safeUser = await User.findById(user._id).select("-password");
+    const userObject = typeof user?.toObject === "function" ? user.toObject() : user;
+    const { password: _password, ...safeUser } = userObject;
 
-    return res
-      .status(StatusCode.CREATED)
-      .json(ApiResponse.created(responseMessage.signupSuccess, { user: safeUser }));
+    return res.status(StatusCode.CREATED).json(ApiResponse.created(responseMessage.signupSuccess, { user: safeUser }));
   } catch (error) {
     console.error("CREATE USER ERROR", error);
-    return res
-      .status(StatusCode.INTERNAL_ERROR)
-      .json(ApiResponse.error(responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR));
+    return sendError(res, responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR);
   }
 };
 
@@ -190,12 +106,10 @@ export const login = async (req: Request, res: Response) => {
         .json(ApiResponse.error(responseMessage.otpSendFailed, null, StatusCode.INTERNAL_ERROR));
     }
 
-    return res.status(StatusCode.OK).json(ApiResponse.success(responseMessage.otpSent));
+    return sendSuccess(res, responseMessage.otpSent);
   } catch (error) {
     console.error("LOGIN ERROR", error);
-    return res
-      .status(StatusCode.INTERNAL_ERROR)
-      .json(ApiResponse.error(responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR));
+    return sendError(res, responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR);
   }
 };
 
@@ -233,20 +147,16 @@ export const verifyOtp = async (req: Request, res: Response) => {
       role: user.role,
     });
 
-    return res.status(StatusCode.OK).json(
-      ApiResponse.success(responseMessage.loginSuccess, {
-        token,
-        user: {
-          _id: user._id,
-          role: user.role,
-        },
-      })
-    );
+    return sendSuccess(res, responseMessage.loginSuccess, {
+      token,
+      user: {
+        _id: user._id,
+        role: user.role,
+      },
+    });
   } catch (error) {
     console.error("VERIFY OTP ERROR", error);
-    return res
-      .status(StatusCode.INTERNAL_ERROR)
-      .json(ApiResponse.error(responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR));
+    return sendError(res, responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR);
   }
 };
 
@@ -255,11 +165,9 @@ export const changePassword = async (req: AuthRequest, res: Response) => {
     const userId = req.user._id;
     const { oldPassword, newPassword } = req.body as ChangePasswordBody;
 
-    const user = await User.findById(userId);
+    const user = await User.findById(userId).select("password");
     if (!user) {
-      return res
-        .status(StatusCode.NOT_FOUND)
-        .json(ApiResponse.error(responseMessage.getDataNotFound("User"), null, StatusCode.NOT_FOUND));
+      return sendNotFound(res, responseMessage.getDataNotFound("User"));
     }
 
     const isMatch = await bcrypt.compare(oldPassword, user.password);
@@ -274,11 +182,9 @@ export const changePassword = async (req: AuthRequest, res: Response) => {
     user.password = hashedPassword;
     await user.save();
 
-    return res.status(StatusCode.OK).json(ApiResponse.success(responseMessage.updateDataSuccess("Password")));
+    return sendSuccess(res, responseMessage.updateDataSuccess("Password"));
   } catch (error) {
-    return res
-      .status(StatusCode.INTERNAL_ERROR)
-      .json(ApiResponse.error(responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR));
+    return sendError(res, responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR);
   }
 };
 
@@ -289,9 +195,7 @@ export const forgotPassword = async (req: Request, res: Response) => {
 
     const user = await getFirstMatch(User, { email: normalizedEmail });
     if (!user) {
-      return res
-        .status(StatusCode.NOT_FOUND)
-        .json(ApiResponse.error(responseMessage.getDataNotFound("User"), null, StatusCode.NOT_FOUND));
+      return sendNotFound(res, responseMessage.getDataNotFound("User"));
     }
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -311,11 +215,9 @@ export const forgotPassword = async (req: Request, res: Response) => {
         .json(ApiResponse.error(responseMessage.otpSendFailed, null, StatusCode.INTERNAL_ERROR));
     }
 
-    return res.status(StatusCode.OK).json(ApiResponse.success(responseMessage.otpSent));
+    return sendSuccess(res, responseMessage.otpSent);
   } catch (error) {
-    return res
-      .status(StatusCode.INTERNAL_ERROR)
-      .json(ApiResponse.error(responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR));
+    return sendError(res, responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR);
   }
 };
 
@@ -341,22 +243,18 @@ export const resetPassword = async (req: Request, res: Response) => {
 
     await Otp.deleteMany({ email: normalizedEmail });
 
-    return res.status(StatusCode.OK).json(ApiResponse.success(responseMessage.updateDataSuccess("Password")));
+    return sendSuccess(res, responseMessage.updateDataSuccess("Password"));
   } catch (error) {
-    return res
-      .status(StatusCode.INTERNAL_ERROR)
-      .json(ApiResponse.error(responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR));
+    return sendError(res, responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR);
   }
 };
 
 /* ================= LOGOUT ================= */
 export const logout = (_req: Request, res: Response) => {
-  return res.status(StatusCode.OK).json(ApiResponse.success(responseMessage.logout));
+  return sendSuccess(res, responseMessage.logout);
 };
 
 /* ================= GET ME ================= */
 export const getMe = (req: AuthRequest, res: Response) => {
-  return res
-    .status(StatusCode.OK)
-    .json(ApiResponse.success("Profile fetched", { _id: req.user._id, role: req.user.role }));
+  return sendSuccess(res, "Profile fetched", { _id: req.user._id, role: req.user.role });
 };

@@ -7,9 +7,8 @@ export interface Product extends mongoose.Document {
   productType: string;
   companyId: mongoose.Types.ObjectId;
   createdBy: mongoose.Types.ObjectId;
-  price: number;        // selling rate
-  mrp: number;          // ✅ ADD
-  taxPercent: number;   // ✅ ADD
+  price: number;       
+  mrp: number;         
   stock: number;
   isActive: boolean;
   isDeleted: boolean;
@@ -35,7 +34,6 @@ const productSchema = new mongoose.Schema<Product>({
 
   mrp: { type: Number, required: true },       // ✅
   price: { type: Number, required: true },
-  taxPercent: { type: Number, default: 0 },    // ✅
 
   stock: { type: Number, default: 0 },
 

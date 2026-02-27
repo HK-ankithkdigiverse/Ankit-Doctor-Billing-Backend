@@ -4,20 +4,17 @@ import {
   getImages,
   deleteImage,
 } from "../controllers/upload/index";
-import { upload } from "../middleware/upload";
+import { handleUploadError, upload } from "../middleware/upload";
 import { authMiddleware } from "../middleware/auth";
 
 const router = Router();
 
-router.use(authMiddleware)
-
-
-router.post("/upload", upload.array("files", 10), uploadImages);
+router.post("/", upload.array("files"), handleUploadError, uploadImages);
 
 
 router.get("/", getImages);
 
 
-router.delete("/", deleteImage);
+router.delete("/", authMiddleware, deleteImage);
 
-export default router;
+export const uploadRouter = router;

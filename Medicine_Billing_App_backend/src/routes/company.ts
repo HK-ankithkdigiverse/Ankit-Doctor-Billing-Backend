@@ -7,7 +7,7 @@ import {
   deleteCompany,
 } from "../controllers/company";
 import { authMiddleware } from "../middleware/auth";
-import { upload } from "../middleware/upload";
+import { handleUploadError, upload } from "../middleware/upload";
 import { validate } from "../middleware/joi";
 import {
   companyIdParamSchema,
@@ -20,7 +20,8 @@ const router = Router();
 router.post(
   "/",
   authMiddleware,
-  upload.single("logo"),
+  upload.array("logo", 1),
+  handleUploadError,
   validate(createCompanySchema),
   createCompany
 );
@@ -37,7 +38,8 @@ router.get(
 router.put(
   "/:id",
   authMiddleware,
-  upload.single("logo"),
+  upload.array("logo", 1),
+  handleUploadError,
   validate(companyIdParamSchema, "params"),
   validate(updateCompanySchema),
   updateCompany
@@ -50,4 +52,4 @@ router.delete(
   deleteCompany
 );
 
-export default router;
+export const companyRouter = router;

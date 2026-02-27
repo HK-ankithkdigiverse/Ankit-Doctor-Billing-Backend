@@ -1,29 +1,33 @@
 import Joi from "joi";
-
-const email = Joi.string().trim().lowercase().email();
-const phone = Joi.string().trim().pattern(/^[0-9]{10}$/);
-const gst = Joi.string().trim().uppercase().pattern(/^[0-9A-Z]{15}$/);
+import {
+  addressSchema,
+  emailSchema,
+  gstNumberSchema,
+  longNameSchema,
+  objectIdSchema,
+  phoneSchema,
+} from "./common";
 
 export const createCompanySchema = Joi.object({
-  name: Joi.string().trim().min(2).max(120).optional(),
-  companyName: Joi.string().trim().min(2).max(120).optional(),
-  gstNumber: gst.required(),
-  email: email.allow("").optional(),
-  phone: phone.allow("").optional(),
+  name: longNameSchema.optional(),
+  companyName: longNameSchema.optional(),
+  gstNumber: gstNumberSchema.required(),
+  email: emailSchema.allow("").optional(),
+  phone: phoneSchema.allow("").optional(),
   state: Joi.string().trim().max(80).allow("").optional(),
-  address: Joi.string().trim().max(500).allow("").optional(),
+  address: addressSchema.allow("").optional(),
 }).or("name", "companyName");
 
 export const updateCompanySchema = Joi.object({
-  name: Joi.string().trim().min(2).max(120).optional(),
-  companyName: Joi.string().trim().min(2).max(120).optional(),
-  gstNumber: gst.optional(),
-  email: email.allow("").optional(),
-  phone: phone.allow("").optional(),
+  name: longNameSchema.optional(),
+  companyName: longNameSchema.optional(),
+  gstNumber: gstNumberSchema.optional(),
+  email: emailSchema.allow("").optional(),
+  phone: phoneSchema.allow("").optional(),
   state: Joi.string().trim().max(80).allow("").optional(),
-  address: Joi.string().trim().max(500).allow("").optional(),
+  address: addressSchema.allow("").optional(),
 }).min(1);
 
 export const companyIdParamSchema = Joi.object({
-  id: Joi.string().pattern(/^[0-9a-fA-F]{24}$/).required(),
+  id: objectIdSchema.required(),
 });
