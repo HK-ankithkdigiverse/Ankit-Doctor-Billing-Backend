@@ -132,7 +132,7 @@ export const getAllUsers = async (req: AuthRequest, res: Response) => {
     const [users, total] = await Promise.all([
       User.find(filter)
         .select("-password")
-        .populate("medicalStoreId", USER_STORE_POPULATE_FIELDS)
+        //.populate("medicalStoreId", USER_STORE_POPULATE_FIELDS)
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limitNum)
