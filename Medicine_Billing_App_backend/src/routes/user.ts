@@ -27,7 +27,7 @@ router.put("/me/password", authMiddleware, validate(changePasswordSchema), chang
 
 /* ================= ADMIN ONLY ================= */
 router.get("/", authMiddleware, allowRoles("ADMIN"), getAllUsers);
-router.post("/", validate(createUserSchema), adminCreateUser);
+router.post("/", authMiddleware, allowRoles("ADMIN"), validate(createUserSchema), adminCreateUser);
 router.put("/:id", authMiddleware, allowRoles("ADMIN"), validate(idParamSchema, "params"), validate(updateUserSchema), adminUpdateUser);
 router.delete("/:id", authMiddleware, allowRoles("ADMIN"), validate(idParamSchema, "params"), deleteUser);
 
