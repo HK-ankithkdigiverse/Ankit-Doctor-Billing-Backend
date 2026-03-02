@@ -1,4 +1,4 @@
-import Joi from "joi";
+﻿import Joi from "joi";
 import { ROLE } from "../common";
 import {
   emailSchema,
@@ -40,7 +40,7 @@ export const createUserSchema = Joi.object({
     .valid(...Object.values(ROLE))
     .optional(),
   isActive: Joi.boolean().optional(),
-  medicalStoreId: objectIdSchema.required(),
+  medicalStoreId: objectIdSchema,
 });
 
 export const updateProfileSchema = Joi.object({
