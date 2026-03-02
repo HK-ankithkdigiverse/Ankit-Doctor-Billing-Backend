@@ -1,6 +1,6 @@
 ﻿import jwt from "jsonwebtoken";
 import { Request, Response, NextFunction } from "express";
-import { ApiResponse, StatusCode } from "../common";
+import { ApiResponse, StatusCode, ROLE } from "../common";
 import { responseMessage } from "../helper";
 import User from "../database/models/auth";
 
@@ -8,7 +8,8 @@ export interface AuthRequest extends Request {
   user?: {
     _id: string;
     role: string;
-    medicalStoreId: string;
+    // admins may not have a store
+    medicalStoreId?: string;
   };
 }
 
@@ -57,7 +58,7 @@ export const authMiddleware = async (
       ? String(currentUser.medicalStoreId)
       : "";
 
-    if (!effectiveMedicalStoreId) {
+    if (currentUser.role !== ROLE.ADMIN && !effectiveMedicalStoreId) {
       return res
         .status(StatusCode.FORBIDDEN)
         .json(ApiResponse.error(responseMessage.medicalIdNotAssigned, null, StatusCode.FORBIDDEN));
@@ -66,7 +67,7 @@ export const authMiddleware = async (
     req.user = {
       _id: currentUser._id.toString(),
       role: currentUser.role,
-      medicalStoreId: effectiveMedicalStoreId,
+      medicalStoreId: effectiveMedicalStoreId || undefined,
     };
 
     return next();

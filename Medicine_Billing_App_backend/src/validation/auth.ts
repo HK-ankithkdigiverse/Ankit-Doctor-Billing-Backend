@@ -40,7 +40,12 @@ export const createUserSchema = Joi.object({
     .valid(...Object.values(ROLE))
     .optional(),
   isActive: Joi.boolean().optional(),
-  medicalStoreId: objectIdSchema,
+  // medicalStoreId is required for non-admin roles but not for ADMIN
+  medicalStoreId: Joi.alternatives().conditional("role", {
+    is: ROLE.ADMIN,
+    then: objectIdSchema.optional().allow(null),
+    otherwise: objectIdSchema.required(),
+  }),
 });
 
 export const updateProfileSchema = Joi.object({

@@ -7,7 +7,8 @@ export interface AdminCreateUserBody {
   signature?: string;
   role?: ROLE;
   isActive?: boolean;
-  medicalStoreId: string;
+  // admin users do not need a medical store assigned, so this field is optional
+  medicalStoreId?: string;
 }
 
 export interface LoginBody {

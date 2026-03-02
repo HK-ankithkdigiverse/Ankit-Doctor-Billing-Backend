@@ -59,32 +59,40 @@ export const adminCreateUser = async (req: AuthRequest, res: Response) => {
         .json(ApiResponse.error(responseMessage.dataAlreadyExist("User"), null, StatusCode.BAD_REQUEST));
     }
 
-    const store = await getFirstMatch(
-      MedicalStoreModel,
-      { _id: medicalStoreId, isDeleted: false },
-      "_id"
-    );
-
-    if (!store) {
-      return sendError(
-        res,
-        responseMessage.getDataNotFound("Medical Store"),
-        null,
-        StatusCode.BAD_REQUEST
+    // if a medicalStoreId is supplied, ensure it points to a valid store regardless of role
+    if (medicalStoreId) {
+      const store = await getFirstMatch(
+        MedicalStoreModel,
+        { _id: medicalStoreId, isDeleted: false },
+        "_id"
       );
+
+      if (!store) {
+        return sendError(
+          res,
+          responseMessage.getDataNotFound("Medical Store"),
+          null,
+          StatusCode.BAD_REQUEST
+        );
+      }
     }
 
     const hashPassword = await bcrypt.hash(password, 12);
 
-    const user: any = await createData(User, {
+    const userPayload: any = {
       name: name.trim(),
       email: normalizedEmail,
       password: hashPassword,
-      medicalStoreId,
       signature: signature?.trim() || "",
       role: role || ROLE.USER,
       isActive: typeof isActive === "boolean" ? isActive : true,
-    });
+    };
+
+    if (medicalStoreId) {
+      userPayload.medicalStoreId = medicalStoreId;
+    }
+
+    const user: any = await createData(User, userPayload);
 
     const safeUser = await User.findById(user._id)
       .select("-password")
@@ -124,7 +132,8 @@ export const login = async (req: Request, res: Response) => {
     const normalizedMedicalStoreId = user.medicalStoreId
       ? String(user.medicalStoreId)
       : "";
-    if (!normalizedMedicalStoreId) {
+    // administrators are not required to have a store when logging in
+    if (user.role !== ROLE.ADMIN && !normalizedMedicalStoreId) {
       return res
         .status(StatusCode.FORBIDDEN)
         .json(ApiResponse.error(responseMessage.medicalIdNotAssigned, null, StatusCode.FORBIDDEN));
@@ -196,17 +205,22 @@ export const verifyOtp = async (req: Request, res: Response) => {
     const normalizedMedicalStoreId = user.medicalStoreId
       ? String(user.medicalStoreId)
       : "";
-    if (!normalizedMedicalStoreId) {
+    // allow admin without store
+    if (user.role !== ROLE.ADMIN && !normalizedMedicalStoreId) {
       return res
         .status(StatusCode.FORBIDDEN)
         .json(ApiResponse.error(responseMessage.medicalIdNotAssigned, null, StatusCode.FORBIDDEN));
     }
 
-    const token = generateToken({
+    const tokenPayload: any = {
       _id: user._id.toString(),
       role: user.role,
-      medicalStoreId: normalizedMedicalStoreId,
-    });
+    };
+    if (normalizedMedicalStoreId) {
+      tokenPayload.medicalStoreId = normalizedMedicalStoreId;
+    }
+
+    const token = generateToken(tokenPayload);
 
     const userWithStore = await User.findById(user._id)
       .select("_id role medicalStoreId")
