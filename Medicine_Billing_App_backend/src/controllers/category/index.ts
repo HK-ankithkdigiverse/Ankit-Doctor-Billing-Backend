@@ -1,4 +1,4 @@
-import { Response } from "express";
+﻿import { Response } from "express";
 import { CategoryModel } from "../../database/models/category";
 import {
   ROLE,
@@ -32,7 +32,7 @@ const mapCategoryItem = (category: any) => ({
   isActive: category.isActive,
   isDeleted: category.isDeleted,
   createdBy: category.createdBy,
-  medicineId: category.medicineId || "",
+  medicalStoreId: category.medicalStoreId || "",
   createdAt: category.createdAt,
   updatedAt: category.updatedAt,
 });
@@ -41,10 +41,7 @@ const getCategoryScopeFilter = (req: AuthRequest) => {
   const filter: any = { isDeleted: false };
 
   if (req.user?.role !== ROLE.ADMIN) {
-    filter.$or = [
-      { medicineId: req.user?.medicineId },
-      { medicineId: { $in: ["", null] }, createdBy: req.user?._id },
-    ];
+    filter.medicalStoreId = req.user?.medicalStoreId;
   }
 
   return filter;
@@ -59,27 +56,21 @@ const canAccessCategory = (category: any, req: AuthRequest) => {
     return false;
   }
 
-  const sameMedicineId = Boolean(category.medicineId) && category.medicineId === req.user.medicineId;
-  const legacyOwnerAccess =
-    !category.medicineId &&
-    category.createdBy?.toString() === req.user._id.toString();
-
-  return sameMedicineId || legacyOwnerAccess;
+  return (
+    Boolean(category.medicalStoreId) &&
+    String(category.medicalStoreId) === String(req.user.medicalStoreId)
+  );
 };
 
 const buildDuplicateCategoryFilter = (
   id: string,
   name: string,
-  medicineId: string,
-  ownerId: string
+  medicalStoreId: string
 ) => ({
   _id: { $ne: id },
   name,
   isDeleted: false,
-  $or: [
-    { medicineId },
-    { medicineId: { $in: ["", null] }, createdBy: ownerId },
-  ],
+  medicalStoreId,
 });
 
 /* ================= CREATE CATEGORY ================= */
@@ -90,7 +81,7 @@ export const createCategory = async (req: AuthRequest, res: Response) => {
     }
 
     const { name, description } = req.body;
-    const medicineId = req.user.medicineId || req.user._id.toString();
+    const medicalStoreId = req.user.medicalStoreId;
 
     const normalizedName = normalizeCategoryName(name);
     const normalizedDescription = normalizeCategoryDescription(description);
@@ -98,10 +89,7 @@ export const createCategory = async (req: AuthRequest, res: Response) => {
     const existing = await getFirstMatch(CategoryModel, {
       name: normalizedName,
       isDeleted: false,
-      $or: [
-        { medicineId },
-        { medicineId: { $in: ["", null] }, createdBy: req.user._id },
-      ],
+      medicalStoreId,
     });
 
     if (existing) {
@@ -110,13 +98,13 @@ export const createCategory = async (req: AuthRequest, res: Response) => {
 
     const createdCategory: any = await createData(CategoryModel, {
       createdBy: req.user._id,
-      medicineId,
+      medicalStoreId,
       name: normalizedName,
       description: normalizedDescription,
       isDeleted: false,
     });
 
-    await createdCategory.populate("createdBy", "name email role medicineId");
+    await createdCategory.populate("createdBy", "name email role medicalStoreId");
 
     return sendSuccess(res, responseMessage.addDataSuccess("Category"), {
       category: mapCategoryItem(createdCategory),
@@ -140,7 +128,7 @@ export const getCategories = async (req: AuthRequest, res: Response) => {
 
     const [categories, total] = await Promise.all([
       CategoryModel.find(filter)
-        .populate("createdBy", "name email role medicineId")
+        .populate("createdBy", "name email role medicalStoreId")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limitNum)
@@ -174,7 +162,7 @@ export const getCategoryById = async (req: AuthRequest, res: Response) => {
     };
 
     const category = await CategoryModel.findOne(filter)
-      .populate("createdBy", "name email role medicineId")
+      .populate("createdBy", "name email role medicalStoreId")
       .lean();
 
     if (!category) {
@@ -206,12 +194,17 @@ export const updateCategory = async (req: AuthRequest, res: Response) => {
 
     if (name !== undefined) {
       const normalizedName = normalizeCategoryName(name);
-      const medicineId = category.medicineId || req.user?.medicineId || "";
+      const medicalStoreId = category.medicalStoreId
+        ? String(category.medicalStoreId)
+        : "";
+      if (!medicalStoreId) {
+        return sendError(res, responseMessage.medicalIdNotAssigned, null, StatusCode.BAD_REQUEST);
+      }
+
       const duplicateFilter: any = buildDuplicateCategoryFilter(
         id,
         normalizedName,
-        medicineId,
-        category.createdBy.toString()
+        medicalStoreId
       );
 
       const duplicate = await getFirstMatch(CategoryModel, duplicateFilter);
@@ -228,7 +221,7 @@ export const updateCategory = async (req: AuthRequest, res: Response) => {
     }
 
     await category.save();
-    await category.populate("createdBy", "name email role medicineId");
+    await category.populate("createdBy", "name email role medicalStoreId");
 
     return sendSuccess(res, responseMessage.updateDataSuccess("Category"), {
       category: mapCategoryItem(category),
@@ -245,7 +238,7 @@ export const deleteCategory = async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
 
     const category = await CategoryModel.findOne({ _id: id, isDeleted: false })
-      .select("_id createdBy medicineId")
+      .select("_id createdBy medicalStoreId")
       .lean();
 
     if (!category) {

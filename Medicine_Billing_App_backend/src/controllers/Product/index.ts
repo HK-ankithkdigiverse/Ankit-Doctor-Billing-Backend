@@ -1,5 +1,6 @@
-import { Response } from "express";
+﻿import { Response } from "express";
 import { Product } from "../../database/models/product";
+import { CompanyModel } from "../../database/models/company";
 import {
   ApiResponse,
   ROLE,
@@ -26,10 +27,7 @@ const getProductScopeFilter = (req: AuthRequest) => {
   }
 
   return {
-    $or: [
-      { medicineId: req.user.medicineId },
-      { medicineId: { $in: ["", null] }, createdBy: req.user._id },
-    ],
+    medicalStoreId: req.user.medicalStoreId,
   };
 };
 
@@ -42,12 +40,10 @@ const canAccessProduct = (product: any, req: AuthRequest) => {
     return false;
   }
 
-  const sameMedicineId = Boolean(product.medicineId) && product.medicineId === req.user.medicineId;
-  const legacyOwnerAccess =
-    !product.medicineId &&
-    product.createdBy?.toString() === req.user._id.toString();
-
-  return sameMedicineId || legacyOwnerAccess;
+  return (
+    Boolean(product.medicalStoreId) &&
+    String(product.medicalStoreId) === String(req.user.medicalStoreId)
+  );
 };
 
 /* ================= CREATE PRODUCT ================= */
@@ -59,10 +55,27 @@ export const createProduct = async (req: AuthRequest, res: Response) => {
 
     const { companyId } = req.body;
 
+    const company = await CompanyModel.findOne({
+      _id: companyId,
+      isDeleted: false,
+      medicalStoreId: req.user.medicalStoreId,
+    })
+      .select("_id")
+      .lean();
+
+    if (!company) {
+      return sendError(
+        res,
+        responseMessage.companyNotAvailableForSelectedUser,
+        null,
+        StatusCode.BAD_REQUEST
+      );
+    }
+
     const product = await createData(Product, {
       ...req.body,
       companyId,
-      medicineId: req.user.medicineId || req.user._id.toString(),
+      medicalStoreId: req.user.medicalStoreId,
       createdBy: req.user._id,
       isDeleted: false,
     });
@@ -93,7 +106,7 @@ export const getProductById = async (req: AuthRequest, res: Response) => {
       undefined,
       [
         { path: "companyId", select: "name companyName" },
-        { path: "createdBy", select: "name email role medicineId" },
+        { path: "createdBy", select: "name email role medicalStoreId" },
       ]
     );
 
@@ -139,7 +152,7 @@ export const getProducts = async (req: AuthRequest, res: Response) => {
     const [products, total] = await Promise.all([
       Product.find(filter)
         .populate("companyId", "name companyName")
-        .populate("createdBy", "name email role medicineId")
+        .populate("createdBy", "name email role medicalStoreId")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limitNum)
@@ -165,7 +178,7 @@ export const getProducts = async (req: AuthRequest, res: Response) => {
 export const updateProduct = async (req: AuthRequest, res: Response) => {
   try {
     const product = await Product.findById(req.params.id)
-      .select("_id createdBy medicineId isDeleted")
+      .select("_id createdBy medicalStoreId isDeleted")
       .lean();
 
     if (!product || product.isDeleted) {
@@ -176,11 +189,37 @@ export const updateProduct = async (req: AuthRequest, res: Response) => {
     }
 
     const payload = { ...req.body };
-    delete payload.medicineId;
+    delete payload.medicalStoreId;
 
     if (req.user?.role !== ROLE.ADMIN) {
       delete payload.companyId;
       delete payload.createdBy;
+    }
+
+    const targetMedicalStoreId = product.medicalStoreId
+      ? String(product.medicalStoreId)
+      : "";
+    if (!targetMedicalStoreId) {
+      return sendError(res, responseMessage.medicalIdNotAssigned, null, StatusCode.BAD_REQUEST);
+    }
+
+    if (payload.companyId !== undefined) {
+      const company = await CompanyModel.findOne({
+        _id: payload.companyId,
+        isDeleted: false,
+        medicalStoreId: targetMedicalStoreId,
+      })
+        .select("_id")
+        .lean();
+
+      if (!company) {
+        return sendError(
+          res,
+          responseMessage.companyNotAvailableForSelectedUser,
+          null,
+          StatusCode.BAD_REQUEST
+        );
+      }
     }
 
     const updatedProduct = await Product.findByIdAndUpdate(
@@ -199,7 +238,7 @@ export const updateProduct = async (req: AuthRequest, res: Response) => {
 export const deleteProduct = async (req: AuthRequest, res: Response) => {
   try {
     const product = await Product.findById(req.params.id)
-      .select("_id createdBy medicineId isDeleted")
+      .select("_id createdBy medicalStoreId isDeleted")
       .lean();
 
     if (!product || product.isDeleted) {

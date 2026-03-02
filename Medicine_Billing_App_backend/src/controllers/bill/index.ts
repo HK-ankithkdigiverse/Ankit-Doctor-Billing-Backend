@@ -1,4 +1,4 @@
-import { Response } from "express";
+﻿import { Response } from "express";
 import { Types } from "mongoose";
 import { BillModel } from "../../database/models/bill";
 import { BillItemModel } from "../../database/models/billItem";
@@ -25,9 +25,13 @@ import { BillInputItem, BillLineItem, CreateBillBody, UpdateBillBody } from "../
 
 const BILL_USER_POPULATE_FIELDS = [
   "name",
-  "medicalName",
   "email",
   "signature",
+  "role",
+  "medicalStoreId",
+].join(" ");
+const BILL_STORE_POPULATE_FIELDS = [
+  "name",
   "phone",
   "address",
   "state",
@@ -35,10 +39,16 @@ const BILL_USER_POPULATE_FIELDS = [
   "pincode",
   "gstNumber",
   "panCardNumber",
-  "role",
-  "medicineId",
+  "isActive",
 ].join(" ");
-const BILL_PRODUCT_SELECT_FIELDS = "_id name category mrp stock medicineId createdBy";
+const BILL_COMPANY_POPULATE_FIELDS =
+  "name companyName gstNumber logo address phone email state";
+const BILL_POPULATE_OPTIONS = [
+  { path: "companyId", select: BILL_COMPANY_POPULATE_FIELDS },
+  { path: "userId", select: BILL_USER_POPULATE_FIELDS },
+  { path: "medicalStoreId", select: BILL_STORE_POPULATE_FIELDS },
+];
+const BILL_PRODUCT_SELECT_FIELDS = "_id name category mrp stock medicalStoreId createdBy";
 
 const toId = (value: unknown) => String(value);
 
@@ -49,7 +59,7 @@ type BillProduct = {
   category?: string;
   mrp: number;
   stock: number;
-  medicineId?: string;
+  medicalStoreId?: Types.ObjectId;
   createdBy: Types.ObjectId;
 };
 type StockBulkOp = {
@@ -73,32 +83,16 @@ const buildQtyMap = (items: QtyMapItem[]) => {
   return qtyMap;
 };
 
-const buildScopeFilter = (
-  medicineId: string,
-  ownerField: string,
-  ownerId?: string | Types.ObjectId
-) => {
-  if (!ownerId) {
-    return { medicineId };
-  }
-
-  return {
-    $or: [
-      { medicineId },
-      { medicineId: { $in: ["", null] }, [ownerField]: ownerId },
-    ],
-  };
-};
+const buildScopeFilter = (medicalStoreId: string) => ({ medicalStoreId });
 
 const getProductMap = async (
   productIds: string[],
-  medicineId: string,
-  ownerId?: string | Types.ObjectId
+  medicalStoreId: string
 ) => {
   const products = await Product.find({
     _id: { $in: productIds },
     isDeleted: false,
-    ...buildScopeFilter(medicineId, "createdBy", ownerId),
+    ...buildScopeFilter(medicalStoreId),
   })
     .select(BILL_PRODUCT_SELECT_FIELDS)
     .lean<BillProduct[]>();
@@ -108,20 +102,19 @@ const getProductMap = async (
 
 const getUserForBilling = async (userId: string) =>
   User.findOne({ _id: userId, isDeleted: false })
-    .select("_id medicineId")
-    .lean<{ _id: Types.ObjectId; medicineId?: string } | null>();
+    .select("_id medicalStoreId")
+    .lean<{ _id: Types.ObjectId; medicalStoreId?: Types.ObjectId } | null>();
 
 const ensureCompanyAccess = async (
   companyId: string,
-  medicineId: string,
-  ownerId?: string | Types.ObjectId
+  medicalStoreId: string
 ) =>
   getFirstMatch(
     CompanyModel,
     {
       _id: companyId,
       isDeleted: false,
-      ...buildScopeFilter(medicineId, "userId", ownerId),
+      ...buildScopeFilter(medicalStoreId),
     },
     "_id"
   );
@@ -245,33 +238,19 @@ const canAccessBill = (bill: any, req: AuthRequest) => {
     return false;
   }
 
-  const sameMedicineId = Boolean(bill.medicineId) && bill.medicineId === req.user.medicineId;
-  const legacyOwnerAccess = !bill.medicineId && bill.userId?.toString() === req.user._id.toString();
-
-  return sameMedicineId || legacyOwnerAccess;
+  return (
+    Boolean(bill.medicalStoreId) &&
+    String(bill.medicalStoreId) === String(req.user.medicalStoreId)
+  );
 };
 
-const getBillMedicineContext = async (bill: any) => {
-  if (bill.medicineId) {
-    return {
-      medicineId: bill.medicineId as string,
-      legacyOwnerId: undefined,
-    };
+const getBillMedicalContext = (bill: any) => {
+  const medicalStoreId = bill.medicalStoreId ? String(bill.medicalStoreId) : "";
+  if (!medicalStoreId) {
+    return null;
   }
 
-  const ownerUserId = bill.userId?.toString();
-  if (!ownerUserId) {
-    return {
-      medicineId: "",
-      legacyOwnerId: undefined,
-    };
-  }
-
-  const owner = await getUserForBilling(ownerUserId);
-  return {
-    medicineId: owner?.medicineId || owner?._id?.toString() || ownerUserId,
-    legacyOwnerId: ownerUserId,
-  };
+  return { medicalStoreId };
 };
 
 export const createBill = async (req: AuthRequest, res: Response) => {
@@ -294,10 +273,14 @@ export const createBill = async (req: AuthRequest, res: Response) => {
       return sendError(res, responseMessage.getDataNotFound("User"), null, StatusCode.BAD_REQUEST);
     }
 
-    const targetMedicineId = targetUser.medicineId || targetUser._id.toString();
-    const ownerForLegacyScope = targetUserId;
+    const targetMedicalStoreId = targetUser.medicalStoreId
+      ? String(targetUser.medicalStoreId)
+      : "";
+    if (!targetMedicalStoreId) {
+      return sendError(res, responseMessage.medicalIdNotAssigned, null, StatusCode.BAD_REQUEST);
+    }
 
-    if (!(await ensureCompanyAccess(companyId, targetMedicineId, ownerForLegacyScope))) {
+    if (!(await ensureCompanyAccess(companyId, targetMedicalStoreId))) {
       return sendError(
         res,
         responseMessage.companyNotAvailableForSelectedUser,
@@ -307,7 +290,7 @@ export const createBill = async (req: AuthRequest, res: Response) => {
     }
 
     const productIds = [...new Set(items.map((item) => toId(item.productId)))];
-    const productMap = await getProductMap(productIds, targetMedicineId, ownerForLegacyScope);
+    const productMap = await getProductMap(productIds, targetMedicalStoreId);
 
     const requiredQtyMap = buildQtyMap(items);
     const stockError = getStockError(requiredQtyMap, productMap);
@@ -323,7 +306,7 @@ export const createBill = async (req: AuthRequest, res: Response) => {
 
     const bill: any = await createData(BillModel, {
       billNo: `BILL-${Date.now()}`,
-      medicineId: targetMedicineId,
+      medicalStoreId: targetMedicalStoreId,
       companyId,
       userId: targetUserId,
       subTotal,
@@ -343,7 +326,19 @@ export const createBill = async (req: AuthRequest, res: Response) => {
       await Product.bulkWrite(stockOps);
     }
 
-    return sendSuccess(res, responseMessage.invoiceCreated, { billId: bill._id });
+    const populatedBill = await findOneAndPopulate(
+      BillModel,
+      { _id: bill._id, isDeleted: false },
+      undefined,
+      undefined,
+      BILL_POPULATE_OPTIONS
+    );
+    const createdItems = await BillItemModel.find({ billId: bill._id }).lean();
+
+    return sendSuccess(res, responseMessage.invoiceCreated, {
+      bill: populatedBill,
+      items: createdItems,
+    });
   } catch (err: any) {
     console.error("CREATE BILL ERROR", { message: err?.message, err });
     return sendError(res, err.message || responseMessage.internalServerError, err, StatusCode.INTERNAL_ERROR);
@@ -352,7 +347,7 @@ export const createBill = async (req: AuthRequest, res: Response) => {
 
 export const getAllBills = async (req: AuthRequest, res: Response) => {
   try {
-    const { role, _id: userId, medicineId } = req.user!;
+    const { role, medicalStoreId } = req.user!;
     const { pageNum, limitNum, skip, searchText } = getPagination(req.query, {
       page: 1,
       limit: 10,
@@ -361,18 +356,16 @@ export const getAllBills = async (req: AuthRequest, res: Response) => {
     const filter: any = { isDeleted: false };
 
     if (role !== ROLE.ADMIN) {
-      filter.$or = [
-        { medicineId },
-        { medicineId: { $in: ["", null] }, userId },
-      ];
+      filter.medicalStoreId = medicalStoreId;
     }
 
     applySearchFilter(filter, searchText, ["billNo"]);
 
     const [bills, total] = await Promise.all([
       BillModel.find(filter)
-        .populate("companyId", "name companyName gstNumber logo address phone email state")
+        .populate("companyId", BILL_COMPANY_POPULATE_FIELDS)
         .populate("userId", BILL_USER_POPULATE_FIELDS)
+        .populate("medicalStoreId", BILL_STORE_POPULATE_FIELDS)
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limitNum)
@@ -402,10 +395,7 @@ export const getBillById = async (req: AuthRequest, res: Response) => {
     };
 
     if (req.user?.role !== ROLE.ADMIN) {
-      filter.$or = [
-        { medicineId: req.user?.medicineId },
-        { medicineId: { $in: ["", null] }, userId: req.user?._id },
-      ];
+      filter.medicalStoreId = req.user?.medicalStoreId;
     }
 
     const bill: any = await findOneAndPopulate(
@@ -413,10 +403,7 @@ export const getBillById = async (req: AuthRequest, res: Response) => {
       filter,
       undefined,
       undefined,
-      [
-        { path: "companyId", select: "name companyName gstNumber logo address phone email state" },
-        { path: "userId", select: BILL_USER_POPULATE_FIELDS },
-      ]
+      BILL_POPULATE_OPTIONS
     );
 
     if (!bill) {
@@ -433,7 +420,7 @@ export const getBillById = async (req: AuthRequest, res: Response) => {
 
 export const deleteBill = async (req: AuthRequest, res: Response) => {
   try {
-    const bill: any = await BillModel.findById(req.params.id).select("_id userId medicineId isDeleted");
+    const bill: any = await BillModel.findById(req.params.id).select("_id userId medicalStoreId isDeleted");
     if (!bill || bill.isDeleted) return sendNotFound(res, responseMessage.invoiceNotFound);
 
     if (!canAccessBill(bill, req)) {
@@ -474,14 +461,24 @@ export const updateBill = async (req: AuthRequest, res: Response) => {
         return sendError(res, responseMessage.getDataNotFound("User"), null, StatusCode.BAD_REQUEST);
       }
 
+      const updatedBillMedicalStoreId = updatedBillUser.medicalStoreId
+        ? String(updatedBillUser.medicalStoreId)
+        : "";
+      if (!updatedBillMedicalStoreId) {
+        return sendError(res, responseMessage.medicalIdNotAssigned, null, StatusCode.BAD_REQUEST);
+      }
+
       bill.userId = payloadUserId;
-      bill.medicineId = updatedBillUser.medicineId || updatedBillUser._id.toString();
+      bill.medicalStoreId = updatedBillMedicalStoreId;
     }
 
-    const billContext = await getBillMedicineContext(bill);
+    const billContext = getBillMedicalContext(bill);
+    if (!billContext) {
+      return sendError(res, responseMessage.medicalIdNotAssigned, null, StatusCode.BAD_REQUEST);
+    }
 
     if (companyId) {
-      if (!(await ensureCompanyAccess(companyId, billContext.medicineId, billContext.legacyOwnerId))) {
+      if (!(await ensureCompanyAccess(companyId, billContext.medicalStoreId))) {
         return sendError(res, responseMessage.companyNotAvailableForSelectedUser, null, StatusCode.BAD_REQUEST);
       }
       bill.companyId = companyId;
@@ -504,8 +501,7 @@ export const updateBill = async (req: AuthRequest, res: Response) => {
       const allProductIds = [...new Set([...oldQtyMap.keys(), ...newQtyMap.keys()])];
       const productMap = await getProductMap(
         allProductIds,
-        billContext.medicineId,
-        billContext.legacyOwnerId
+        billContext.medicalStoreId
       );
 
       const updateStockError = getStockErrorForUpdate(allProductIds, oldQtyMap, newQtyMap, productMap);
@@ -544,7 +540,19 @@ export const updateBill = async (req: AuthRequest, res: Response) => {
 
     await bill.save();
 
-    return sendSuccess(res, responseMessage.updateDataSuccess("Bill"), { bill });
+    const populatedBill = await findOneAndPopulate(
+      BillModel,
+      { _id: bill._id, isDeleted: false },
+      undefined,
+      undefined,
+      BILL_POPULATE_OPTIONS
+    );
+    const updatedItems = await BillItemModel.find({ billId: bill._id }).lean();
+
+    return sendSuccess(res, responseMessage.updateDataSuccess("Bill"), {
+      bill: populatedBill,
+      items: updatedItems,
+    });
   } catch {
     return sendError(res, responseMessage.internalServerError, null, StatusCode.INTERNAL_ERROR);
   }

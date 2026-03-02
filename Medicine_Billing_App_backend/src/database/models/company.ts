@@ -1,9 +1,9 @@
-import { Schema, model, Document, Types } from "mongoose";
+﻿import { Schema, model, Document, Types } from "mongoose";
 import { MODEL } from "../../common";
 
 export interface ICompany extends Document {
   userId: Types.ObjectId;
-  medicineId: string;
+  medicalStoreId: Types.ObjectId;
   name: string;
   gstNumber: string;
   address?: string;
@@ -22,23 +22,20 @@ const companySchema = new Schema<ICompany>(
       ref: MODEL.USER,
       required: true,
     },
-    medicineId: {
-      type: String,
-      trim: true,
-      uppercase: true,
-      default: "",
+    medicalStoreId: {
+      type: Schema.Types.ObjectId,
+      ref: MODEL.MEDICAL_STORE,
+      required: true,
       index: true,
     },
     name: {
       type: String,
       required: true,
       trim: true,
-      unique: true,
     },
     gstNumber: {
       type: String,
       required: true,
-      unique: true,
       uppercase: true,
       trim: true,
     },
@@ -60,7 +57,7 @@ const companySchema = new Schema<ICompany>(
       trim: true,
     },
     logo: {
-      type: String, // store image filename
+      type: String,
     },
     isActive: {
       type: Boolean,
@@ -74,5 +71,17 @@ const companySchema = new Schema<ICompany>(
   { timestamps: true, toJSON: { virtuals: true }, toObject: { virtuals: true } }
 );
 
+companySchema.index(
+  { medicalStoreId: 1, name: 1 },
+  { unique: true, partialFilterExpression: { isDeleted: false } }
+);
+companySchema.index(
+  { medicalStoreId: 1, gstNumber: 1 },
+  { unique: true, partialFilterExpression: { isDeleted: false } }
+);
 
 export const CompanyModel = model<ICompany>(MODEL.COMPANY, companySchema);
+
+export const ensureCompanyCollectionIndexes = async () => {
+  await CompanyModel.syncIndexes();
+};

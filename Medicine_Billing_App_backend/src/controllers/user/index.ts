@@ -1,15 +1,40 @@
-import User from "../../database/models/auth";
+﻿import User from "../../database/models/auth";
+import { MedicalStoreModel } from "../../database/models/medicalStore";
 import { Response } from "express";
 import { StatusCode } from "../../common";
-import {AuthRequest} from "../../middleware/auth"
-import { applySearchFilter, countData, getPagination, responseMessage, sendError, sendNotFound, sendSuccess } from "../../helper";
+import { AuthRequest } from "../../middleware/auth";
+import {
+  applySearchFilter,
+  countData,
+  getFirstMatch,
+  getPagination,
+  responseMessage,
+  sendError,
+  sendNotFound,
+  sendSuccess,
+} from "../../helper";
+
+const USER_STORE_POPULATE_FIELDS = [
+  "name",
+  "phone",
+  "address",
+  "state",
+  "city",
+  "pincode",
+  "gstNumber",
+  "panCardNumber",
+  "isActive",
+].join(" ");
 
 // GET PROFILE (USER + ADMIN)
 export const getProfile = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user._id;
 
-    const user = await User.findById(userId).select("-password").lean();
+    const user = await User.findById(userId)
+      .select("-password")
+      .populate("medicalStoreId", USER_STORE_POPULATE_FIELDS)
+      .lean();
 
     if (!user) {
       return sendNotFound(res, responseMessage.getDataNotFound("User"));
@@ -25,27 +50,22 @@ export const getProfile = async (req: AuthRequest, res: Response) => {
 export const updateUser = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user._id;
-    const {name,medicalName,email,signature,phone,address,state,city,pincode,gstNumber,panCardNumber,} = req.body;
+    const { name, email, signature } = req.body;
 
     const updatePayload: Record<string, unknown> = {};
 
     if (name !== undefined) updatePayload.name = name;
-    if (medicalName !== undefined) updatePayload.medicalName = medicalName;
     if (email !== undefined) updatePayload.email = email;
     if (signature !== undefined) updatePayload.signature = signature;
-    if (phone !== undefined) updatePayload.phone = phone;
-    if (address !== undefined) updatePayload.address = address;
-    if (state !== undefined) updatePayload.state = state;
-    if (city !== undefined) updatePayload.city = city;
-    if (pincode !== undefined) updatePayload.pincode = pincode;
-    if (gstNumber !== undefined) updatePayload.gstNumber = String(gstNumber).toUpperCase();
-    if (panCardNumber !== undefined) updatePayload.panCardNumber = String(panCardNumber).toUpperCase();
 
     const updatedUser = await User.findByIdAndUpdate(
       userId,
       updatePayload,
       { new: true }
-    ).select("-password").lean();
+    )
+      .select("-password")
+      .populate("medicalStoreId", USER_STORE_POPULATE_FIELDS)
+      .lean();
 
     if (!updatedUser) {
       return sendNotFound(res, responseMessage.getDataNotFound("User"));
@@ -94,16 +114,8 @@ export const getAllUsers = async (req: AuthRequest, res: Response) => {
     if (searchText) {
       applySearchFilter(filter, searchText, [
         "name",
-        "medicalName",
         "email",
-        "medicineId",
-        "phone",
-        "address",
-        "state",
-        "city",
-        "pincode",
-        "gstNumber",
-        "panCardNumber",
+        "medicalStoreId",
         "role",
       ]);
 
@@ -120,6 +132,7 @@ export const getAllUsers = async (req: AuthRequest, res: Response) => {
     const [users, total] = await Promise.all([
       User.find(filter)
         .select("-password")
+        .populate("medicalStoreId", USER_STORE_POPULATE_FIELDS)
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limitNum)
@@ -147,19 +160,31 @@ export const adminUpdateUser = async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     const payload = { ...req.body };
 
-    if (payload.gstNumber !== undefined) {
-      payload.gstNumber = String(payload.gstNumber).toUpperCase();
-    }
+    if (payload.medicalStoreId !== undefined) {
+      const store = await getFirstMatch(
+        MedicalStoreModel,
+        { _id: payload.medicalStoreId, isDeleted: false },
+        "_id"
+      );
 
-    if (payload.panCardNumber !== undefined) {
-      payload.panCardNumber = String(payload.panCardNumber).toUpperCase();
+      if (!store) {
+        return sendError(
+          res,
+          responseMessage.getDataNotFound("Medical Store"),
+          null,
+          StatusCode.BAD_REQUEST
+        );
+      }
     }
 
     const user = await User.findByIdAndUpdate(
       id,
       payload,
       { new: true }
-    ).select("-password").lean();
+    )
+      .select("-password")
+      .populate("medicalStoreId", USER_STORE_POPULATE_FIELDS)
+      .lean();
 
     if (!user) {
       return sendNotFound(res, responseMessage.getDataNotFound("User"));
@@ -170,3 +195,4 @@ export const adminUpdateUser = async (req: AuthRequest, res: Response) => {
     return sendError(res, responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR);
   }
 };
+

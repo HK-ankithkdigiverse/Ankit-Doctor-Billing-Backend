@@ -1,4 +1,4 @@
-import { Response } from "express";
+﻿import { Response } from "express";
 import { CompanyModel } from "../../database/models/company";
 import { ROLE, StatusCode } from "../../common";
 import {
@@ -38,10 +38,7 @@ const getCompanyScopeFilter = (req: AuthRequest) => {
   const filter: Record<string, unknown> = { isDeleted: false };
 
   if (req.user?.role !== ROLE.ADMIN) {
-    filter.$or = [
-      { medicineId: req.user?.medicineId },
-      { medicineId: { $in: ["", null] }, userId: req.user?._id },
-    ];
+    filter.medicalStoreId = req.user?.medicalStoreId;
   }
 
   return filter;
@@ -56,12 +53,10 @@ const canAccessCompany = (company: any, req: AuthRequest) => {
     return false;
   }
 
-  const sameMedicineId = Boolean(company.medicineId) && company.medicineId === req.user.medicineId;
-  const legacyOwnerAccess =
-    !company.medicineId &&
-    company.userId?.toString() === req.user._id.toString();
-
-  return sameMedicineId || legacyOwnerAccess;
+  return (
+    Boolean(company.medicalStoreId) &&
+    String(company.medicalStoreId) === String(req.user.medicalStoreId)
+  );
 };
 
 // ================= CREATE =================
@@ -80,7 +75,7 @@ export const createCompany = async (
 
     const newCompany = await createData(CompanyModel, {
       userId: req.user._id,
-      medicineId: req.user.medicineId || req.user._id.toString(),
+      medicalStoreId: req.user.medicalStoreId,
       name,
       gstNumber,
       address,
@@ -115,7 +110,7 @@ export const getAllCompanies = async (
 
     const [companies, total] = await Promise.all([
       CompanyModel.find(filter)
-        .populate("userId", "name email role medicineId")
+        .populate("userId", "name email role medicalStoreId")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limitNum)
@@ -168,7 +163,7 @@ export const getSingleCompany = async (req: AuthRequest, res: Response) => {
 export const updateCompany = async (req: AuthRequest, res: Response) => {
   try {
     const company = await CompanyModel.findById(req.params.id)
-      .select("_id userId medicineId isDeleted")
+      .select("_id userId medicalStoreId isDeleted")
       .lean();
 
     if (!company || company.isDeleted) {
@@ -180,7 +175,7 @@ export const updateCompany = async (req: AuthRequest, res: Response) => {
     }
 
     delete req.body.logo;
-    delete req.body.medicineId;
+    delete req.body.medicalStoreId;
 
     const allowedFields = [
       "companyName",
@@ -224,7 +219,7 @@ export const deleteCompany = async (req: AuthRequest, res: Response) => {
 
     const { id } = req.params;
     const company = await CompanyModel.findById(id)
-      .select("_id userId medicineId isDeleted")
+      .select("_id userId medicalStoreId isDeleted")
       .lean();
 
     if (!company || company.isDeleted) {

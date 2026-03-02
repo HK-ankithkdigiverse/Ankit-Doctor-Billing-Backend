@@ -1,17 +1,9 @@
 import Joi from "joi";
-import { MEDICINE_ID_MODE, ROLE } from "../common";
+import { ROLE } from "../common";
 import {
-  addressSchema,
-  citySchema,
   emailSchema,
-  gstNumberSchema,
-  longNameSchema,
   nameSchema,
   objectIdSchema,
-  panCardSchema,
-  phoneSchema,
-  pincodeSchema,
-  shortStateSchema,
 } from "./common";
 
 export const loginSchema = Joi.object({
@@ -41,64 +33,33 @@ export const changePasswordSchema = Joi.object({
 
 export const createUserSchema = Joi.object({
   name: nameSchema.required(),
-  medicalName: longNameSchema.required(),
   email: emailSchema.required(),
   password: Joi.string().min(6).max(64).required(),
   signature: Joi.string().trim().allow("").optional(),
-  phone: phoneSchema.allow("").optional(),
-  address: addressSchema.required(),
-  state: shortStateSchema.required(),
-  city: citySchema.required(),
-  pincode: pincodeSchema.required(),
-  gstNumber: gstNumberSchema.required(),
-  panCardNumber: panCardSchema.required(),
   role: Joi.string()
     .valid(...Object.values(ROLE))
     .optional(),
   isActive: Joi.boolean().optional(),
-  medicineIdMode: Joi.string()
-    .valid(...Object.values(MEDICINE_ID_MODE))
-    .required(),
-  medicineId: Joi.when("medicineIdMode", {
-    is: MEDICINE_ID_MODE.ASSIGN_EXISTING,
-    then: Joi.string().trim().uppercase().min(8).max(60).required(),
-    otherwise: Joi.string().trim().uppercase().min(8).max(60).optional(),
-  }),
+  medicalStoreId: objectIdSchema.required(),
 });
 
 export const updateProfileSchema = Joi.object({
   name: nameSchema.optional(),
-  medicalName: longNameSchema.optional(),
   email: emailSchema.optional(),
   signature: Joi.string().trim().allow("").optional(),
-  phone: phoneSchema.allow("").optional(),
-  address: addressSchema.optional(),
-  state: shortStateSchema.optional(),
-  city: citySchema.optional(),
-  pincode: pincodeSchema.optional(),
-  gstNumber: gstNumberSchema.optional(),
-  panCardNumber: panCardSchema.optional(),
 }).min(1);
 
 export const updateUserSchema = Joi.object({
   name: nameSchema.optional(),
-  medicalName: longNameSchema.optional(),
   email: emailSchema.optional(),
   signature: Joi.string().trim().allow("").optional(),
-  phone: phoneSchema.allow("").optional(),
-  address: addressSchema.optional(),
-  state: shortStateSchema.optional(),
-  city: citySchema.optional(),
-  pincode: pincodeSchema.optional(),
-  gstNumber: gstNumberSchema.optional(),
-  panCardNumber: panCardSchema.optional(),
   role: Joi.string()
     .valid(...Object.values(ROLE))
     .optional(),
   isActive: Joi.boolean().optional(),
+  medicalStoreId: objectIdSchema.optional(),
 }).min(1);
 
 export const idParamSchema = Joi.object({
   id: objectIdSchema.required(),
 });
-  

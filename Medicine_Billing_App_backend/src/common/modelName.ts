@@ -6,4 +6,5 @@ export const MODEL = {
   PRODUCT: "Product",
   BILL: "Bill",
   BILL_ITEM: "BillItem",
+  MEDICAL_STORE: "MedicalStore",
 };

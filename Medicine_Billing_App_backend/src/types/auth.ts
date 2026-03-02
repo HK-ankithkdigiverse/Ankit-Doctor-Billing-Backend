@@ -1,24 +1,13 @@
-import { ROLE } from "../common";
-
-export type MedicineIdMode = "CREATE_NEW" | "ASSIGN_EXISTING";
+﻿import { ROLE } from "../common";
 
 export interface AdminCreateUserBody {
   name: string;
-  medicalName: string;
   email: string;
   password: string;
   signature?: string;
-  phone?: string;
-  address: string;
-  state: string;
-  city: string;
-  pincode: string;
-  gstNumber: string;
-  panCardNumber: string;
   role?: ROLE;
   isActive?: boolean;
-  medicineIdMode: MedicineIdMode;
-  medicineId?: string;
+  medicalStoreId: string;
 }
 
 export interface LoginBody {

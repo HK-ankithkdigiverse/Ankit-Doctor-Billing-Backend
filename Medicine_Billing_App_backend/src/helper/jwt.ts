@@ -1,9 +1,9 @@
-import jwt, { JwtPayload } from "jsonwebtoken";
+﻿import jwt, { JwtPayload } from "jsonwebtoken";
 
 export interface AuthPayload {
   _id: string;
   role?: string;
-  medicineId?: string;
+  medicalStoreId?: string;
 }
 
 export const generateToken = (payload: AuthPayload): string => {

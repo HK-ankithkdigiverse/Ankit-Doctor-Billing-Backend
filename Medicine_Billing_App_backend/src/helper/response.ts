@@ -1,4 +1,4 @@
-export const responseMessage = {
+﻿export const responseMessage = {
   // AUTH
   loginSuccess: "Login successful!",
   signupSuccess: "Account created successfully!",
@@ -13,6 +13,7 @@ export const responseMessage = {
 
   // ACCESS
   accessDenied: "Access denied!",
+  medicalIdNotAssigned: "Medical Store is not assigned to this user. Please contact admin.",
 
   // COMPANY
   companyInactive: "This company is inactive!",
@@ -55,3 +56,4 @@ export const responseMessage = {
 
   getDataNotFound: (name: string): string => `${name} not found!`,
 };
+

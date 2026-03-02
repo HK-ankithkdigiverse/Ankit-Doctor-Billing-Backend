@@ -1,5 +1,6 @@
-import User from "../../database/models/auth";
+﻿import User from "../../database/models/auth";
 import Otp from "../../database/models/otp";
+import { MedicalStoreModel } from "../../database/models/medicalStore";
 import { Request, Response } from "express";
 import {
   createData,
@@ -10,7 +11,7 @@ import {
   sendSuccess,
   updateData,
 } from "../../helper";
-import { ApiResponse, MEDICINE_ID_MODE, ROLE, StatusCode } from "../../common";
+import { ApiResponse, ROLE, StatusCode } from "../../common";
 import { responseMessage } from "../../helper/";
 import { generateToken } from "../../helper/jwt";
 import bcrypt from "bcryptjs";
@@ -24,41 +25,29 @@ import {
   VerifyOtpBody,
 } from "../../types/auth";
 
-const buildMedicineId = () => {
-  const random = Math.random().toString(36).slice(2, 8).toUpperCase();
-  return `MED-${Date.now()}-${random}`;
-};
-
-const generateUniqueMedicineId = async () => {
-  let medicineId = buildMedicineId();
-
-  while (await getFirstMatch(User, { medicineId }, "_id")) {
-    medicineId = buildMedicineId();
-  }
-
-  return medicineId;
-};
+const USER_STORE_POPULATE_FIELDS = [
+  "name",
+  "phone",
+  "address",
+  "state",
+  "city",
+  "pincode",
+  "gstNumber",
+  "panCardNumber",
+  "isActive",
+].join(" ");
 
 // ADMIN -> CREATE USER
 export const adminCreateUser = async (req: AuthRequest, res: Response) => {
   try {
     const {
       name,
-      medicalName,
       email,
       password,
       signature,
-      phone,
-      address,
-      state,
-      city,
-      pincode,
-      gstNumber,
-      panCardNumber,
       role,
       isActive,
-      medicineIdMode,
-      medicineId,
+      medicalStoreId,
     } = req.body as AdminCreateUserBody;
 
     const normalizedEmail = email.toLowerCase().trim();
@@ -70,60 +59,37 @@ export const adminCreateUser = async (req: AuthRequest, res: Response) => {
         .json(ApiResponse.error(responseMessage.dataAlreadyExist("User"), null, StatusCode.BAD_REQUEST));
     }
 
-    const hashPassword = await bcrypt.hash(password, 12);
-    let assignedMedicineId = "";
+    const store = await getFirstMatch(
+      MedicalStoreModel,
+      { _id: medicalStoreId, isDeleted: false },
+      "_id"
+    );
 
-    if (medicineIdMode === MEDICINE_ID_MODE.ASSIGN_EXISTING) {
-      const normalizedMedicineId = medicineId?.trim().toUpperCase();
-      if (!normalizedMedicineId) {
-        return sendError(
-          res,
-          responseMessage.validationError("medicineId"),
-          null,
-          StatusCode.BAD_REQUEST
-        );
-      }
-
-      const existingMedicineGroup = await getFirstMatch(
-        User,
-        { medicineId: normalizedMedicineId, isDeleted: false },
-        "_id"
+    if (!store) {
+      return sendError(
+        res,
+        responseMessage.getDataNotFound("Medical Store"),
+        null,
+        StatusCode.BAD_REQUEST
       );
-
-      if (!existingMedicineGroup) {
-        return sendError(
-          res,
-          responseMessage.getDataNotFound("Medicine ID"),
-          null,
-          StatusCode.BAD_REQUEST
-        );
-      }
-
-      assignedMedicineId = normalizedMedicineId;
-    } else {
-      assignedMedicineId = await generateUniqueMedicineId();
     }
+
+    const hashPassword = await bcrypt.hash(password, 12);
 
     const user: any = await createData(User, {
       name: name.trim(),
-      medicalName: medicalName.trim(),
       email: normalizedEmail,
       password: hashPassword,
-      medicineId: assignedMedicineId,
+      medicalStoreId,
       signature: signature?.trim() || "",
-      phone,
-      address: address.trim(),
-      state: state.trim(),
-      city: city.trim(),
-      pincode: pincode.trim(),
-      gstNumber: gstNumber.trim().toUpperCase(),
-      panCardNumber: panCardNumber.trim().toUpperCase(),
       role: role || ROLE.USER,
       isActive: typeof isActive === "boolean" ? isActive : true,
     });
 
-    const userObject = typeof user?.toObject === "function" ? user.toObject() : user;
-    const { password: _password, ...safeUser } = userObject;
+    const safeUser = await User.findById(user._id)
+      .select("-password")
+      .populate("medicalStoreId", USER_STORE_POPULATE_FIELDS)
+      .lean();
 
     return res.status(StatusCode.CREATED).json(ApiResponse.created(responseMessage.signupSuccess, { user: safeUser }));
   } catch (error) {
@@ -153,6 +119,15 @@ export const login = async (req: Request, res: Response) => {
       return res
         .status(StatusCode.FORBIDDEN)
         .json(ApiResponse.error(responseMessage.accountInactive, null, StatusCode.FORBIDDEN));
+    }
+
+    const normalizedMedicalStoreId = user.medicalStoreId
+      ? String(user.medicalStoreId)
+      : "";
+    if (!normalizedMedicalStoreId) {
+      return res
+        .status(StatusCode.FORBIDDEN)
+        .json(ApiResponse.error(responseMessage.medicalIdNotAssigned, null, StatusCode.FORBIDDEN));
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
@@ -218,18 +193,33 @@ export const verifyOtp = async (req: Request, res: Response) => {
         .json(ApiResponse.error(responseMessage.accountInactive, null, StatusCode.FORBIDDEN));
     }
 
+    const normalizedMedicalStoreId = user.medicalStoreId
+      ? String(user.medicalStoreId)
+      : "";
+    if (!normalizedMedicalStoreId) {
+      return res
+        .status(StatusCode.FORBIDDEN)
+        .json(ApiResponse.error(responseMessage.medicalIdNotAssigned, null, StatusCode.FORBIDDEN));
+    }
+
     const token = generateToken({
       _id: user._id.toString(),
       role: user.role,
-      medicineId: user.medicineId || user._id.toString(),
+      medicalStoreId: normalizedMedicalStoreId,
     });
+
+    const userWithStore = await User.findById(user._id)
+      .select("_id role medicalStoreId")
+      .populate("medicalStoreId", USER_STORE_POPULATE_FIELDS)
+      .lean();
 
     return sendSuccess(res, responseMessage.loginSuccess, {
       token,
       user: {
         _id: user._id,
         role: user.role,
-        medicineId: user.medicineId || user._id.toString(),
+        medicalStoreId: normalizedMedicalStoreId,
+        medicalStore: userWithStore?.medicalStoreId || null,
       },
     });
   } catch (error) {
@@ -333,10 +323,19 @@ export const logout = (_req: Request, res: Response) => {
 };
 
 /* ================= GET ME ================= */
-export const getMe = (req: AuthRequest, res: Response) => {
-  return sendSuccess(res, "Profile fetched", {
-    _id: req.user._id,
-    role: req.user.role,
-    medicineId: req.user.medicineId,
-  });
+export const getMe = async (req: AuthRequest, res: Response) => {
+  try {
+    const user = await User.findById(req.user._id)
+      .select("-password")
+      .populate("medicalStoreId", USER_STORE_POPULATE_FIELDS)
+      .lean();
+
+    if (!user) {
+      return sendNotFound(res, responseMessage.getDataNotFound("User"));
+    }
+
+    return sendSuccess(res, "Profile fetched", { user });
+  } catch (error) {
+    return sendError(res, responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR);
+  }
 };

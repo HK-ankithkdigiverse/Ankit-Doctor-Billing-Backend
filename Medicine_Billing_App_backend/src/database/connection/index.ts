@@ -1,5 +1,7 @@
-import mongoose from 'mongoose';
+﻿import mongoose from 'mongoose';
 import { ensureCategoryCollectionIndexes } from '../models/category';
+import { ensureCompanyCollectionIndexes } from '../models/company';
+import { ensureMedicalStoreCollectionIndexes } from '../models/medicalStore';
 
 const dbUrl = process.env.DB_URL;
 
@@ -12,5 +14,6 @@ export const connectDatabase = async (): Promise<void> => {
     await mongoose.connect(dbUrl);
     console.log("Database successfully connected");
     await ensureCategoryCollectionIndexes();
+    await ensureCompanyCollectionIndexes();
+    await ensureMedicalStoreCollectionIndexes();
 };
-

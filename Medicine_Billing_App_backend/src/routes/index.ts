@@ -6,6 +6,7 @@ import {productRouter} from "./product";
 import {billRouter} from "./bill";
 import {userRouter} from "./user";
 import {categoryRouter} from "./category";
+import { medicalStoreRouter } from "./medicalStore";
 
 const router = Router();
 
@@ -16,6 +17,6 @@ router.use("/products", productRouter);
 router.use("/bills", billRouter);
 router.use("/users", userRouter);
 router.use("/categories", categoryRouter);
+router.use("/medical-stores", medicalStoreRouter);
 
 export default router;
-

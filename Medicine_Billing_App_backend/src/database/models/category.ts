@@ -1,9 +1,9 @@
-import mongoose from "mongoose";
+﻿import mongoose from "mongoose";
 import { MODEL } from "../../common";
 
 export interface ICategory extends mongoose.Document {
   createdBy: mongoose.Types.ObjectId;
-  medicineId: string;
+  medicalStoreId: mongoose.Types.ObjectId;
   name: string;
   description: string;
   isActive: boolean;
@@ -20,11 +20,10 @@ const categorySchema = new mongoose.Schema<ICategory>(
       required: true,
       index: true,
     },
-    medicineId: {
-      type: String,
-      trim: true,
-      uppercase: true,
-      default: "",
+    medicalStoreId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: MODEL.MEDICAL_STORE,
+      required: true,
       index: true,
     },
     name: { type: String, required: true, trim: true, lowercase: true },
@@ -35,9 +34,8 @@ const categorySchema = new mongoose.Schema<ICategory>(
   { timestamps: true }
 );
 
-// Prevent duplicate active category names per user.
 categorySchema.index(
-  { createdBy: 1, name: 1 },
+  { medicalStoreId: 1, name: 1 },
   { unique: true, partialFilterExpression: { isDeleted: false } }
 );
 
@@ -46,4 +44,3 @@ export const CategoryModel = mongoose.model<ICategory>(MODEL.CATEGORY, categoryS
 export const ensureCategoryCollectionIndexes = async () => {
   await CategoryModel.syncIndexes();
 };
-
