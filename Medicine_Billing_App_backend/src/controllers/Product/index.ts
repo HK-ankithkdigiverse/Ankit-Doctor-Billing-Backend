@@ -1,9 +1,54 @@
 import { Response } from "express";
 import { Product } from "../../database/models/product";
-import {applySearchFilter,countData,createData,findOneAndPopulate,getPagination,responseMessage,sendError,sendNotFound,sendSuccess,sendUnauthorized,} from "../../helper";
-import { ApiResponse, StatusCode } from "../../common";
+import {
+  ApiResponse,
+  ROLE,
+  StatusCode,
+} from "../../common";
+import {
+  applySearchFilter,
+  countData,
+  createData,
+  findOneAndPopulate,
+  getPagination,
+  responseMessage,
+  sendError,
+  sendNotFound,
+  sendSuccess,
+  sendUnauthorized,
+} from "../../helper";
 import { AuthRequest } from "../../middleware/auth";
 import mongoose from "mongoose";
+
+const getProductScopeFilter = (req: AuthRequest) => {
+  if (!req.user || req.user.role === ROLE.ADMIN) {
+    return {};
+  }
+
+  return {
+    $or: [
+      { medicineId: req.user.medicineId },
+      { medicineId: { $in: ["", null] }, createdBy: req.user._id },
+    ],
+  };
+};
+
+const canAccessProduct = (product: any, req: AuthRequest) => {
+  if (req.user?.role === ROLE.ADMIN) {
+    return true;
+  }
+
+  if (!req.user) {
+    return false;
+  }
+
+  const sameMedicineId = Boolean(product.medicineId) && product.medicineId === req.user.medicineId;
+  const legacyOwnerAccess =
+    !product.medicineId &&
+    product.createdBy?.toString() === req.user._id.toString();
+
+  return sameMedicineId || legacyOwnerAccess;
+};
 
 /* ================= CREATE PRODUCT ================= */
 export const createProduct = async (req: AuthRequest, res: Response) => {
@@ -17,11 +62,14 @@ export const createProduct = async (req: AuthRequest, res: Response) => {
     const product = await createData(Product, {
       ...req.body,
       companyId,
-      createdBy: req.user._id, // ✅ FIXED
+      medicineId: req.user.medicineId || req.user._id.toString(),
+      createdBy: req.user._id,
       isDeleted: false,
     });
 
-    return res.status(StatusCode.CREATED).json(ApiResponse.created(responseMessage.addDataSuccess("Product"), { product }));
+    return res.status(StatusCode.CREATED).json(
+      ApiResponse.created(responseMessage.addDataSuccess("Product"), { product })
+    );
   } catch (error) {
     return sendError(res, responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR);
   }
@@ -35,12 +83,8 @@ export const getProductById = async (req: AuthRequest, res: Response) => {
     const filter: any = {
       _id: id,
       isDeleted: false,
+      ...getProductScopeFilter(req),
     };
-
-    // 🔐 USER restriction
-    if (req.user?.role !== "ADMIN") {
-      filter.createdBy = req.user?._id;
-    }
 
     const product = await findOneAndPopulate(
       Product,
@@ -49,7 +93,7 @@ export const getProductById = async (req: AuthRequest, res: Response) => {
       undefined,
       [
         { path: "companyId", select: "name companyName" },
-        { path: "createdBy", select: "name email role" },
+        { path: "createdBy", select: "name email role medicineId" },
       ]
     );
 
@@ -63,7 +107,6 @@ export const getProductById = async (req: AuthRequest, res: Response) => {
   }
 };
 
-
 export const getProducts = async (req: AuthRequest, res: Response) => {
   try {
     const {
@@ -76,12 +119,14 @@ export const getProducts = async (req: AuthRequest, res: Response) => {
     } = req.query;
     const { pageNum, limitNum, skip, searchText } = getPagination(
       { page, limit, search },
-      { page: 1, limit: 10 },
+      { page: 1, limit: 10 }
     );
 
-    const filter: any = { isDeleted: false };
+    const filter: any = {
+      isDeleted: false,
+      ...getProductScopeFilter(req),
+    };
 
-    // 🔹 Filters
     if (category) filter.category = category;
     if (productType) filter.productType = productType;
 
@@ -89,19 +134,12 @@ export const getProducts = async (req: AuthRequest, res: Response) => {
       filter.companyId = new mongoose.Types.ObjectId(companyId as string);
     }
 
-    // 🔍 SEARCH (name, category, productType)
     applySearchFilter(filter, searchText, ["name", "category", "productType"]);
 
-    // 🔐 USER restriction
-    if (req.user?.role !== "ADMIN") {
-      filter.createdBy = req.user._id;
-    }
-
-    // 📄 Pagination
     const [products, total] = await Promise.all([
       Product.find(filter)
         .populate("companyId", "name companyName")
-        .populate("createdBy", "name email role")
+        .populate("createdBy", "name email role medicineId")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limitNum)
@@ -123,24 +161,24 @@ export const getProducts = async (req: AuthRequest, res: Response) => {
   }
 };
 
-
 /* ================= UPDATE PRODUCT ================= */
 export const updateProduct = async (req: AuthRequest, res: Response) => {
   try {
-    const product = await Product.findById(req.params.id).select("_id createdBy isDeleted").lean();
+    const product = await Product.findById(req.params.id)
+      .select("_id createdBy medicineId isDeleted")
+      .lean();
 
     if (!product || product.isDeleted) {
       return sendNotFound(res, responseMessage.getDataNotFound("Product"));
     }
-    if (
-      req.user?.role !== "ADMIN" &&
-      product.createdBy.toString() !== req.user?._id.toString()
-    ) {
+    if (!canAccessProduct(product, req)) {
       return sendError(res, responseMessage.notAuthorized, null, StatusCode.FORBIDDEN);
     }
 
     const payload = { ...req.body };
-    if (req.user?.role !== "ADMIN") {
+    delete payload.medicineId;
+
+    if (req.user?.role !== ROLE.ADMIN) {
       delete payload.companyId;
       delete payload.createdBy;
     }
@@ -160,17 +198,15 @@ export const updateProduct = async (req: AuthRequest, res: Response) => {
 /* ================= SOFT DELETE PRODUCT ================= */
 export const deleteProduct = async (req: AuthRequest, res: Response) => {
   try {
-    const product = await Product.findById(req.params.id).select("_id createdBy isDeleted").lean();
+    const product = await Product.findById(req.params.id)
+      .select("_id createdBy medicineId isDeleted")
+      .lean();
 
     if (!product || product.isDeleted) {
       return sendNotFound(res, responseMessage.getDataNotFound("Product"));
     }
 
-    // 🔒 Permission check
-    if (
-      req.user?.role !== "ADMIN" &&
-      product.createdBy.toString() !== req.user?._id.toString()
-    ) {
+    if (!canAccessProduct(product, req)) {
       return sendError(res, responseMessage.notAuthorized, null, StatusCode.FORBIDDEN);
     }
 

@@ -1,7 +1,21 @@
 import { Response } from "express";
 import { CategoryModel } from "../../database/models/category";
-import {applySearchFilter,countData,createData,getFirstMatch,getPagination,responseMessage,sendError,sendNotFound,sendSuccess,sendUnauthorized,} from "../../helper";
-import { StatusCode } from "../../common";
+import {
+  ROLE,
+  StatusCode,
+} from "../../common";
+import {
+  applySearchFilter,
+  countData,
+  createData,
+  getFirstMatch,
+  getPagination,
+  responseMessage,
+  sendError,
+  sendNotFound,
+  sendSuccess,
+  sendUnauthorized,
+} from "../../helper";
 import { AuthRequest } from "../../middleware/auth";
 
 const normalizeCategoryName = (name: string) => name.trim().toLowerCase();
@@ -18,19 +32,55 @@ const mapCategoryItem = (category: any) => ({
   isActive: category.isActive,
   isDeleted: category.isDeleted,
   createdBy: category.createdBy,
+  medicineId: category.medicineId || "",
   createdAt: category.createdAt,
-updatedAt: category.updatedAt,
+  updatedAt: category.updatedAt,
 });
 
-const getCategoryFilter = (req: AuthRequest) => {
+const getCategoryScopeFilter = (req: AuthRequest) => {
   const filter: any = { isDeleted: false };
 
-  if (req.user?.role !== "ADMIN") {
-    filter.createdBy = req.user?._id;
+  if (req.user?.role !== ROLE.ADMIN) {
+    filter.$or = [
+      { medicineId: req.user?.medicineId },
+      { medicineId: { $in: ["", null] }, createdBy: req.user?._id },
+    ];
   }
 
   return filter;
 };
+
+const canAccessCategory = (category: any, req: AuthRequest) => {
+  if (req.user?.role === ROLE.ADMIN) {
+    return true;
+  }
+
+  if (!req.user) {
+    return false;
+  }
+
+  const sameMedicineId = Boolean(category.medicineId) && category.medicineId === req.user.medicineId;
+  const legacyOwnerAccess =
+    !category.medicineId &&
+    category.createdBy?.toString() === req.user._id.toString();
+
+  return sameMedicineId || legacyOwnerAccess;
+};
+
+const buildDuplicateCategoryFilter = (
+  id: string,
+  name: string,
+  medicineId: string,
+  ownerId: string
+) => ({
+  _id: { $ne: id },
+  name,
+  isDeleted: false,
+  $or: [
+    { medicineId },
+    { medicineId: { $in: ["", null] }, createdBy: ownerId },
+  ],
+});
 
 /* ================= CREATE CATEGORY ================= */
 export const createCategory = async (req: AuthRequest, res: Response) => {
@@ -40,14 +90,18 @@ export const createCategory = async (req: AuthRequest, res: Response) => {
     }
 
     const { name, description } = req.body;
+    const medicineId = req.user.medicineId || req.user._id.toString();
 
     const normalizedName = normalizeCategoryName(name);
     const normalizedDescription = normalizeCategoryDescription(description);
 
     const existing = await getFirstMatch(CategoryModel, {
-      createdBy: req.user._id,
       name: normalizedName,
       isDeleted: false,
+      $or: [
+        { medicineId },
+        { medicineId: { $in: ["", null] }, createdBy: req.user._id },
+      ],
     });
 
     if (existing) {
@@ -56,12 +110,13 @@ export const createCategory = async (req: AuthRequest, res: Response) => {
 
     const createdCategory: any = await createData(CategoryModel, {
       createdBy: req.user._id,
+      medicineId,
       name: normalizedName,
       description: normalizedDescription,
       isDeleted: false,
     });
 
-    await createdCategory.populate("createdBy", "name email role");
+    await createdCategory.populate("createdBy", "name email role medicineId");
 
     return sendSuccess(res, responseMessage.addDataSuccess("Category"), {
       category: mapCategoryItem(createdCategory),
@@ -80,12 +135,12 @@ export const getCategories = async (req: AuthRequest, res: Response) => {
       limit: 10,
     });
 
-    const filter: any = getCategoryFilter(req);
+    const filter: any = getCategoryScopeFilter(req);
     applySearchFilter(filter, searchText, ["name", "description"]);
 
     const [categories, total] = await Promise.all([
       CategoryModel.find(filter)
-        .populate("createdBy", "name email role")
+        .populate("createdBy", "name email role medicineId")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limitNum)
@@ -113,13 +168,13 @@ export const getCategoryById = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
 
-    const filter: any = { _id: id, isDeleted: false };
-    if (req.user?.role !== "ADMIN") {
-      filter.createdBy = req.user?._id;
-    }
+    const filter: any = {
+      _id: id,
+      ...getCategoryScopeFilter(req),
+    };
 
     const category = await CategoryModel.findOne(filter)
-      .populate("createdBy", "name email role")
+      .populate("createdBy", "name email role medicineId")
       .lean();
 
     if (!category) {
@@ -139,25 +194,27 @@ export const updateCategory = async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     const { name, description } = req.body;
 
-    const filter: any = { _id: id, isDeleted: false };
-    if (req.user?.role !== "ADMIN") {
-      filter.createdBy = req.user?._id;
-    }
-
-    const category = await CategoryModel.findOne(filter);
+    const category = await CategoryModel.findOne({ _id: id, isDeleted: false });
 
     if (!category) {
       return sendNotFound(res, responseMessage.getDataNotFound("Category"));
     }
 
+    if (!canAccessCategory(category, req)) {
+      return sendError(res, responseMessage.notAuthorized, null, StatusCode.FORBIDDEN);
+    }
+
     if (name !== undefined) {
       const normalizedName = normalizeCategoryName(name);
-      const duplicate = await getFirstMatch(CategoryModel, {
-        _id: { $ne: id },
-        createdBy: category.createdBy,
-        name: normalizedName,
-        isDeleted: false,
-      });
+      const medicineId = category.medicineId || req.user?.medicineId || "";
+      const duplicateFilter: any = buildDuplicateCategoryFilter(
+        id,
+        normalizedName,
+        medicineId,
+        category.createdBy.toString()
+      );
+
+      const duplicate = await getFirstMatch(CategoryModel, duplicateFilter);
 
       if (duplicate) {
         return sendError(res, responseMessage.categoryNameAlreadyExists, null, StatusCode.BAD_REQUEST);
@@ -171,7 +228,7 @@ export const updateCategory = async (req: AuthRequest, res: Response) => {
     }
 
     await category.save();
-    await category.populate("createdBy", "name email role");
+    await category.populate("createdBy", "name email role medicineId");
 
     return sendSuccess(res, responseMessage.updateDataSuccess("Category"), {
       category: mapCategoryItem(category),
@@ -187,19 +244,19 @@ export const deleteCategory = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
 
-    const filter: any = { _id: id, isDeleted: false };
-    if (req.user?.role !== "ADMIN") {
-      filter.createdBy = req.user?._id;
-    }
+    const category = await CategoryModel.findOne({ _id: id, isDeleted: false })
+      .select("_id createdBy medicineId")
+      .lean();
 
-    const category = await CategoryModel.findOneAndUpdate(
-      filter,
-      { $set: { isDeleted: true } },
-      { new: true }
-    );
     if (!category) {
       return sendNotFound(res, responseMessage.getDataNotFound("Category"));
     }
+
+    if (!canAccessCategory(category, req)) {
+      return sendError(res, responseMessage.notAuthorized, null, StatusCode.FORBIDDEN);
+    }
+
+    await CategoryModel.findByIdAndUpdate(id, { $set: { isDeleted: true } });
 
     return sendSuccess(res, responseMessage.deleteDataSuccess("Category"));
   } catch (error) {
@@ -213,14 +270,15 @@ export const getActiveCategoriesForDropdown = async (
   res: Response
 ) => {
   try {
-    const filter: any = getCategoryFilter(req);
+    const filter: any = getCategoryScopeFilter(req);
     filter.isActive = true;
 
-    const categories = (await CategoryModel.find(filter).select("_id name").sort({ name: 1 }).lean())
-      .map((cat: any) => ({
-        _id: cat._id,
-        name: safeText(cat.name),
-      }));
+    const categories = (
+      await CategoryModel.find(filter).select("_id name").sort({ name: 1 }).lean()
+    ).map((cat: any) => ({
+      _id: cat._id,
+      name: safeText(cat.name),
+    }));
 
     return sendSuccess(res, "Categories fetched successfully", { categories });
   } catch (error) {

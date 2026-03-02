@@ -1,7 +1,19 @@
 import { Response } from "express";
 import { CompanyModel } from "../../database/models/company";
-import {applySearchFilter,countData,createData,getFirstMatch,getPagination,responseMessage,sendCreated,sendError,sendNotFound,sendSuccess,sendUnauthorized,updateData,} from "../../helper";
 import { ROLE, StatusCode } from "../../common";
+import {
+  applySearchFilter,
+  countData,
+  createData,
+  getPagination,
+  responseMessage,
+  sendCreated,
+  sendError,
+  sendNotFound,
+  sendSuccess,
+  sendUnauthorized,
+  updateData,
+} from "../../helper";
 import { AuthRequest } from "../../middleware/auth";
 import { CompanyPayload } from "../../types/company";
 
@@ -22,9 +34,39 @@ const getLogoFilenameFromRequest = (req: AuthRequest): string | undefined => {
   return files.logo?.[0]?.filename;
 };
 
+const getCompanyScopeFilter = (req: AuthRequest) => {
+  const filter: Record<string, unknown> = { isDeleted: false };
+
+  if (req.user?.role !== ROLE.ADMIN) {
+    filter.$or = [
+      { medicineId: req.user?.medicineId },
+      { medicineId: { $in: ["", null] }, userId: req.user?._id },
+    ];
+  }
+
+  return filter;
+};
+
+const canAccessCompany = (company: any, req: AuthRequest) => {
+  if (req.user?.role === ROLE.ADMIN) {
+    return true;
+  }
+
+  if (!req.user) {
+    return false;
+  }
+
+  const sameMedicineId = Boolean(company.medicineId) && company.medicineId === req.user.medicineId;
+  const legacyOwnerAccess =
+    !company.medicineId &&
+    company.userId?.toString() === req.user._id.toString();
+
+  return sameMedicineId || legacyOwnerAccess;
+};
+
 // ================= CREATE =================
 export const createCompany = async (
-  req:AuthRequest,
+  req: AuthRequest,
   res: Response
 ) => {
   try {
@@ -36,9 +78,9 @@ export const createCompany = async (
     const name = rawName || companyName;
     const logoFilename = getLogoFilenameFromRequest(req);
 
-
     const newCompany = await createData(CompanyModel, {
       userId: req.user._id,
+      medicineId: req.user.medicineId || req.user._id.toString(),
       name,
       gstNumber,
       address,
@@ -67,18 +109,13 @@ export const getAllCompanies = async (
       limit: 10,
     });
 
-    const filter: Record<string, unknown> = { isDeleted: false };
+    const filter: Record<string, unknown> = getCompanyScopeFilter(req);
 
-    if (req.user?.role !== ROLE.ADMIN) {
-      filter.userId = req.user?._id;
-    }
-
-
-    applySearchFilter(filter, searchText, ["companyName","name","gstNumber","phone","email","state",]);
+    applySearchFilter(filter, searchText, ["companyName", "name", "gstNumber", "phone", "email", "state"]);
 
     const [companies, total] = await Promise.all([
       CompanyModel.find(filter)
-        .populate("userId", "name email role")
+        .populate("userId", "name email role medicineId")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limitNum)
@@ -108,13 +145,11 @@ export const getSingleCompany = async (req: AuthRequest, res: Response) => {
     }
 
     const { id } = req.params;
-    const isAdmin = req.user.role === ROLE.ADMIN;
 
-    const filter: Record<string, unknown> = { _id: id, isDeleted: false };
-
-    if (!isAdmin) {
-      filter.userId = req.user._id;
-    }
+    const filter: Record<string, unknown> = {
+      _id: id,
+      ...getCompanyScopeFilter(req),
+    };
 
     const company = await CompanyModel.findOne(filter).lean();
 
@@ -123,7 +158,6 @@ export const getSingleCompany = async (req: AuthRequest, res: Response) => {
     }
 
     return sendSuccess(res, "Company fetched successfully", { company });
-
   } catch (error) {
     console.error("GET SINGLE COMPANY ERROR", error);
     return sendError(res, responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR);
@@ -133,21 +167,20 @@ export const getSingleCompany = async (req: AuthRequest, res: Response) => {
 // ================= UPDATE =================
 export const updateCompany = async (req: AuthRequest, res: Response) => {
   try {
-    const company = await CompanyModel.findById(req.params.id).select("_id userId isDeleted").lean();
+    const company = await CompanyModel.findById(req.params.id)
+      .select("_id userId medicineId isDeleted")
+      .lean();
 
     if (!company || company.isDeleted) {
       return sendNotFound(res, responseMessage.getDataNotFound("Company"));
     }
 
-    if (
-      req.user?.role !== ROLE.ADMIN &&
-      company.userId.toString() !== req.user?._id.toString()
-    ) {
+    if (!canAccessCompany(company, req)) {
       return sendError(res, responseMessage.accessDenied, null, StatusCode.FORBIDDEN);
     }
 
-    // ❌ prevent logo update
     delete req.body.logo;
+    delete req.body.medicineId;
 
     const allowedFields = [
       "companyName",
@@ -182,7 +215,6 @@ export const updateCompany = async (req: AuthRequest, res: Response) => {
   }
 };
 
-
 // ================= DELETE (SOFT DELETE) =================
 export const deleteCompany = async (req: AuthRequest, res: Response) => {
   try {
@@ -191,27 +223,26 @@ export const deleteCompany = async (req: AuthRequest, res: Response) => {
     }
 
     const { id } = req.params;
-    const isAdmin = req.user.role === ROLE.ADMIN;
+    const company = await CompanyModel.findById(id)
+      .select("_id userId medicineId isDeleted")
+      .lean();
 
-    const filter: Record<string, unknown> = { _id: id, isDeleted: false };
-
-    if (!isAdmin) {
-      filter.userId = req.user._id;
+    if (!company || company.isDeleted) {
+      return sendNotFound(res, responseMessage.getDataNotFound("Company"));
     }
 
-    const company = await updateData(
+    if (!canAccessCompany(company, req)) {
+      return sendError(res, responseMessage.accessDenied, null, StatusCode.FORBIDDEN);
+    }
+
+    await updateData(
       CompanyModel,
-      filter,
+      { _id: id },
       { isDeleted: true },
       { new: true }
     );
 
-    if (!company) {
-      return sendNotFound(res, responseMessage.getDataNotFound("Company"));
-    }
-
     return sendSuccess(res, responseMessage.deleteDataSuccess("Company"));
-
   } catch (error) {
     console.error("DELETE COMPANY ERROR", error);
     return sendError(res, responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR);

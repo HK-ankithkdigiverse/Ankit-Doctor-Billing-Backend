@@ -1,5 +1,7 @@
 import { ROLE } from "../common";
 
+export type MedicineIdMode = "CREATE_NEW" | "ASSIGN_EXISTING";
+
 export interface AdminCreateUserBody {
   name: string;
   medicalName: string;
@@ -15,6 +17,8 @@ export interface AdminCreateUserBody {
   panCardNumber: string;
   role?: ROLE;
   isActive?: boolean;
+  medicineIdMode: MedicineIdMode;
+  medicineId?: string;
 }
 
 export interface LoginBody {

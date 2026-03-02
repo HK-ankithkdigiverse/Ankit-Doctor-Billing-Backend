@@ -2,15 +2,17 @@ import jwt from "jsonwebtoken";
 import { Request, Response, NextFunction } from "express";
 import { ApiResponse, StatusCode } from "../common";
 import { responseMessage } from "../helper";
+import User from "../database/models/auth";
 
 export interface AuthRequest extends Request {
   user?: {
     _id: string;
     role: string;
+    medicineId: string;
   };
 }
 
-export const authMiddleware = (
+export const authMiddleware = async (
   req: AuthRequest,
   res: Response,
   next: NextFunction
@@ -31,15 +33,43 @@ export const authMiddleware = (
       process.env.JWT_TOKEN_SECRET as string
     ) as {
       _id: string;
-      role: string;
+      role?: string;
+      medicineId?: string;
     };
+
+    const currentUser = await User.findById(decoded._id)
+      .select("_id role medicineId isActive isDeleted")
+      .lean();
+
+    if (!currentUser || currentUser.isDeleted) {
+      return res
+        .status(StatusCode.UNAUTHORIZED)
+        .json(ApiResponse.error(responseMessage.invalidToken, null, StatusCode.UNAUTHORIZED));
+    }
+
+    if (currentUser.isActive === false) {
+      return res
+        .status(StatusCode.FORBIDDEN)
+        .json(ApiResponse.error(responseMessage.accountInactive, null, StatusCode.FORBIDDEN));
+    }
+
+    let effectiveMedicineId = (currentUser.medicineId || "").toUpperCase();
+
+    if (!effectiveMedicineId) {
+      effectiveMedicineId = currentUser._id.toString().toUpperCase();
+      await User.updateOne(
+        { _id: currentUser._id },
+        { $set: { medicineId: effectiveMedicineId } }
+      );
+    }
 
     req.user = {
-      _id: decoded._id,
-      role: decoded.role,
+      _id: currentUser._id.toString(),
+      role: currentUser.role,
+      medicineId: effectiveMedicineId,
     };
 
-    next();
+    return next();
   } catch {
     return res
       .status(StatusCode.UNAUTHORIZED)

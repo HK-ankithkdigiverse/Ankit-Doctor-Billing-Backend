@@ -3,6 +3,7 @@ import jwt, { JwtPayload } from "jsonwebtoken";
 export interface AuthPayload {
   _id: string;
   role?: string;
+  medicineId?: string;
 }
 
 export const generateToken = (payload: AuthPayload): string => {

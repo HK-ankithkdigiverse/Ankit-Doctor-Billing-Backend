@@ -3,6 +3,7 @@ import { MODEL } from "../../common";
 
 export interface ICompany extends Document {
   userId: Types.ObjectId;
+  medicineId: string;
   name: string;
   gstNumber: string;
   address?: string;
@@ -20,6 +21,13 @@ const companySchema = new Schema<ICompany>(
       type: Schema.Types.ObjectId,
       ref: MODEL.USER,
       required: true,
+    },
+    medicineId: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      default: "",
+      index: true,
     },
     name: {
       type: String,

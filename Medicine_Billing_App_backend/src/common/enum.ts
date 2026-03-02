@@ -3,6 +3,11 @@ export enum ROLE {
   USER = "USER",
 }
 
+export enum MEDICINE_ID_MODE {
+  CREATE_NEW = "CREATE_NEW",
+  ASSIGN_EXISTING = "ASSIGN_EXISTING",
+}
+
 export enum OTP_STATUS {
   ACTIVE = "ACTIVE",
   USED = "USED",

@@ -1,22 +1,66 @@
 import User from "../../database/models/auth";
 import Otp from "../../database/models/otp";
 import { Request, Response } from "express";
-import {createData,email_verification_mail,getFirstMatch,sendError,sendNotFound,sendSuccess,updateData} from "../../helper";
-import { ApiResponse, ROLE, StatusCode } from "../../common";
+import {
+  createData,
+  email_verification_mail,
+  getFirstMatch,
+  sendError,
+  sendNotFound,
+  sendSuccess,
+  updateData,
+} from "../../helper";
+import { ApiResponse, MEDICINE_ID_MODE, ROLE, StatusCode } from "../../common";
 import { responseMessage } from "../../helper/";
 import { generateToken } from "../../helper/jwt";
 import bcrypt from "bcryptjs";
-import {AuthRequest} from "../../middleware/auth"
-import {AdminCreateUserBody,ChangePasswordBody,ForgotPasswordBody,LoginBody,ResetPasswordBody,VerifyOtpBody} from "../../types/auth";
+import { AuthRequest } from "../../middleware/auth";
+import {
+  AdminCreateUserBody,
+  ChangePasswordBody,
+  ForgotPasswordBody,
+  LoginBody,
+  ResetPasswordBody,
+  VerifyOtpBody,
+} from "../../types/auth";
 
+const buildMedicineId = () => {
+  const random = Math.random().toString(36).slice(2, 8).toUpperCase();
+  return `MED-${Date.now()}-${random}`;
+};
 
+const generateUniqueMedicineId = async () => {
+  let medicineId = buildMedicineId();
 
-// ADMIN → CREATE USER
+  while (await getFirstMatch(User, { medicineId }, "_id")) {
+    medicineId = buildMedicineId();
+  }
+
+  return medicineId;
+};
+
+// ADMIN -> CREATE USER
 export const adminCreateUser = async (req: AuthRequest, res: Response) => {
   try {
-    const {name,medicalName,email,password,signature,phone,address,state,city, pincode,gstNumber,panCardNumber,role,isActive,} = req.body as AdminCreateUserBody;
+    const {
+      name,
+      medicalName,
+      email,
+      password,
+      signature,
+      phone,
+      address,
+      state,
+      city,
+      pincode,
+      gstNumber,
+      panCardNumber,
+      role,
+      isActive,
+      medicineIdMode,
+      medicineId,
+    } = req.body as AdminCreateUserBody;
 
-    // Normalize email
     const normalizedEmail = email.toLowerCase().trim();
 
     const existingUser = await getFirstMatch(User, { email: normalizedEmail });
@@ -27,12 +71,45 @@ export const adminCreateUser = async (req: AuthRequest, res: Response) => {
     }
 
     const hashPassword = await bcrypt.hash(password, 12);
+    let assignedMedicineId = "";
+
+    if (medicineIdMode === MEDICINE_ID_MODE.ASSIGN_EXISTING) {
+      const normalizedMedicineId = medicineId?.trim().toUpperCase();
+      if (!normalizedMedicineId) {
+        return sendError(
+          res,
+          responseMessage.validationError("medicineId"),
+          null,
+          StatusCode.BAD_REQUEST
+        );
+      }
+
+      const existingMedicineGroup = await getFirstMatch(
+        User,
+        { medicineId: normalizedMedicineId, isDeleted: false },
+        "_id"
+      );
+
+      if (!existingMedicineGroup) {
+        return sendError(
+          res,
+          responseMessage.getDataNotFound("Medicine ID"),
+          null,
+          StatusCode.BAD_REQUEST
+        );
+      }
+
+      assignedMedicineId = normalizedMedicineId;
+    } else {
+      assignedMedicineId = await generateUniqueMedicineId();
+    }
 
     const user: any = await createData(User, {
       name: name.trim(),
       medicalName: medicalName.trim(),
       email: normalizedEmail,
       password: hashPassword,
+      medicineId: assignedMedicineId,
       signature: signature?.trim() || "",
       phone,
       address: address.trim(),
@@ -141,10 +218,10 @@ export const verifyOtp = async (req: Request, res: Response) => {
         .json(ApiResponse.error(responseMessage.accountInactive, null, StatusCode.FORBIDDEN));
     }
 
-    // 🔥 FIXED TOKEN STRUCTURE
     const token = generateToken({
       _id: user._id.toString(),
       role: user.role,
+      medicineId: user.medicineId || user._id.toString(),
     });
 
     return sendSuccess(res, responseMessage.loginSuccess, {
@@ -152,6 +229,7 @@ export const verifyOtp = async (req: Request, res: Response) => {
       user: {
         _id: user._id,
         role: user.role,
+        medicineId: user.medicineId || user._id.toString(),
       },
     });
   } catch (error) {
@@ -256,5 +334,9 @@ export const logout = (_req: Request, res: Response) => {
 
 /* ================= GET ME ================= */
 export const getMe = (req: AuthRequest, res: Response) => {
-  return sendSuccess(res, "Profile fetched", { _id: req.user._id, role: req.user.role });
+  return sendSuccess(res, "Profile fetched", {
+    _id: req.user._id,
+    role: req.user.role,
+    medicineId: req.user.medicineId,
+  });
 };

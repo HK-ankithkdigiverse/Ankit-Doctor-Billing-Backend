@@ -3,6 +3,7 @@ import { MODEL } from "../../common";
 
 export interface ICategory extends mongoose.Document {
   createdBy: mongoose.Types.ObjectId;
+  medicineId: string;
   name: string;
   description: string;
   isActive: boolean;
@@ -17,6 +18,13 @@ const categorySchema = new mongoose.Schema<ICategory>(
       type: mongoose.Schema.Types.ObjectId,
       ref: MODEL.USER,
       required: true,
+      index: true,
+    },
+    medicineId: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      default: "",
       index: true,
     },
     name: { type: String, required: true, trim: true, lowercase: true },
@@ -38,5 +46,4 @@ export const CategoryModel = mongoose.model<ICategory>(MODEL.CATEGORY, categoryS
 export const ensureCategoryCollectionIndexes = async () => {
   await CategoryModel.syncIndexes();
 };
-
 

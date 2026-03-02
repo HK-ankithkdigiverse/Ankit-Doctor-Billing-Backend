@@ -4,6 +4,13 @@ import { MODEL } from "../../common";
 const billSchema = new mongoose.Schema(
   {
     billNo: { type: String, required: true, unique: true },
+    medicineId: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      default: "",
+      index: true,
+    },
 
     companyId: {
       type: mongoose.Schema.Types.ObjectId,

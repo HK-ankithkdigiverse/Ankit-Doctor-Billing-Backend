@@ -96,6 +96,7 @@ export const getAllUsers = async (req: AuthRequest, res: Response) => {
         "name",
         "medicalName",
         "email",
+        "medicineId",
         "phone",
         "address",
         "state",

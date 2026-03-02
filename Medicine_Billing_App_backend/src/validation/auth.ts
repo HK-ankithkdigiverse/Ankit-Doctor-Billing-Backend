@@ -1,5 +1,5 @@
 import Joi from "joi";
-import { ROLE } from "../common";
+import { MEDICINE_ID_MODE, ROLE } from "../common";
 import {
   addressSchema,
   citySchema,
@@ -56,6 +56,14 @@ export const createUserSchema = Joi.object({
     .valid(...Object.values(ROLE))
     .optional(),
   isActive: Joi.boolean().optional(),
+  medicineIdMode: Joi.string()
+    .valid(...Object.values(MEDICINE_ID_MODE))
+    .required(),
+  medicineId: Joi.when("medicineIdMode", {
+    is: MEDICINE_ID_MODE.ASSIGN_EXISTING,
+    then: Joi.string().trim().uppercase().min(8).max(60).required(),
+    otherwise: Joi.string().trim().uppercase().min(8).max(60).optional(),
+  }),
 });
 
 export const updateProfileSchema = Joi.object({

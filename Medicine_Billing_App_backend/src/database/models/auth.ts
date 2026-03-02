@@ -6,6 +6,7 @@ export interface IAuth extends Document {
   medicalName: string;
   email: string;
   password: string;
+  medicineId: string;
   signature: string;
   phone: string;
   address: string;
@@ -41,6 +42,13 @@ const userSchema = new mongoose.Schema<IAuth>(
     password: {
       type: String,
       required: true,
+    },
+    medicineId: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      default: "",
+      index: true,
     },
     signature: {
       type: String,

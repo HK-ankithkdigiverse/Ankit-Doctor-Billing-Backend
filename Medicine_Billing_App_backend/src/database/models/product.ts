@@ -5,6 +5,7 @@ export interface Product extends mongoose.Document {
   name: string;
   category: string;
   productType: string;
+  medicineId: string;
   companyId: mongoose.Types.ObjectId;
   createdBy: mongoose.Types.ObjectId;
   price: number;       
@@ -19,6 +20,13 @@ const productSchema = new mongoose.Schema<Product>({
   name: { type: String, required: true },
   category: { type: String, required: true },
   productType: { type: String, required: true },
+  medicineId: {
+    type: String,
+    trim: true,
+    uppercase: true,
+    default: "",
+    index: true,
+  },
 
   companyId: {
     type: mongoose.Schema.Types.ObjectId,
