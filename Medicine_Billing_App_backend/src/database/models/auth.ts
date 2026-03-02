@@ -30,12 +30,12 @@ const userSchema = new mongoose.Schema<IAuth>(
       type: String,
       required: true,
     },
-    medicalStoreId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: MODEL.MEDICAL_STORE,
-      index: true,
-      default: null,
-    },
+    // medicalStoreId: {
+    //   type: mongoose.Schema.Types.ObjectId,
+    //   ref: MODEL.MEDICAL_STORE,
+    //   index: true,
+    //   default: null,
+    // },
     signature: {
       type: String,
       trim: true,
