@@ -5,15 +5,15 @@ import { Request, Response } from "express";
 import {
   createData,
   email_verification_mail,
+  generateToken,
   getFirstMatch,
+  responseMessage,
   sendError,
   sendNotFound,
   sendSuccess,
   updateData,
 } from "../../helper";
 import { ApiResponse, ROLE, StatusCode } from "../../common";
-import { responseMessage } from "../../helper/";
-import { generateToken } from "../../helper/jwt";
 import bcrypt from "bcryptjs";
 import { AuthRequest } from "../../middleware/auth";
 import {
