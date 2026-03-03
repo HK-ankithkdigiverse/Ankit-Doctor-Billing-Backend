@@ -8,7 +8,7 @@ export interface AuthPayload {
 
 export const generateToken = (payload: AuthPayload): string => {
   return jwt.sign(payload, process.env.JWT_TOKEN_SECRET as string, {
-    expiresIn: "10s",
+    expiresIn: "24h",
   });
 };
 
