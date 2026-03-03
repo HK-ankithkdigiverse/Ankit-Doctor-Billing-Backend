@@ -14,3 +14,8 @@ export enum TAX_TYPE {
   SGST = "SGST",
   IGST = "IGST"
 }
+
+export enum GST_TYPE {
+  IGST = "IGST",
+  CGST_SGST = "CGST_SGST",
+}

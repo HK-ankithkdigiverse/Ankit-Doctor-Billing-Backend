@@ -1,7 +1,7 @@
 import { Response } from "express";
 import User from "../../database/models/auth";
 import { MedicalStoreModel } from "../../database/models/medicalStore";
-import { ROLE, StatusCode } from "../../common";
+import { GST_TYPE, ROLE, StatusCode } from "../../common";
 import {
   applySearchFilter,
   countData,
@@ -19,6 +19,14 @@ import { AuthRequest } from "../../middleware/auth";
 
 const normalizeValue = (value: unknown) =>
   typeof value === "string" ? value.trim() : "";
+
+const normalizeGstType = (value: unknown) => {
+  const normalized = normalizeValue(value).toUpperCase();
+  if (normalized === "CGST & SGST") {
+    return GST_TYPE.CGST_SGST;
+  }
+  return normalized;
+};
 
 const normalizeStorePayload = (payload: Record<string, unknown>) => {
   const nextPayload: Record<string, unknown> = {};
@@ -43,6 +51,9 @@ const normalizeStorePayload = (payload: Record<string, unknown>) => {
   }
   if (payload.gstNumber !== undefined) {
     nextPayload.gstNumber = normalizeValue(payload.gstNumber).toUpperCase();
+  }
+  if (payload.gstType !== undefined) {
+    nextPayload.gstType = normalizeGstType(payload.gstType);
   }
   if (payload.panCardNumber !== undefined) {
     nextPayload.panCardNumber = normalizeValue(payload.panCardNumber).toUpperCase();
@@ -126,6 +137,7 @@ export const getMedicalStores = async (req: AuthRequest, res: Response) => {
       "city",
       "pincode",
       "gstNumber",
+      "gstType",
       "panCardNumber",
     ]);
 

@@ -9,13 +9,6 @@ const billItemSchema = Joi.object({
 
   qty: Joi.number().positive().required(),
   freeQty: Joi.number().min(0).optional(),
-
-  rate: Joi.number().positive().required(),
-  mrp: Joi.number().positive().optional(),
-
-  taxPercent: Joi.number().min(0).optional(),
-  igst: Joi.number().min(0).optional(),
-  discount: Joi.number().min(0).optional(),
 });
 
 /* =========================
@@ -24,7 +17,7 @@ const billItemSchema = Joi.object({
 export const createBillSchema = Joi.object({
   userId: objectIdSchema.optional(),
   companyId: objectIdSchema.required(),
-
+  gstPercent: Joi.number().min(0).optional(),
   discount: Joi.number().min(0).optional(),
 
   items: Joi.array()
@@ -39,6 +32,7 @@ export const createBillSchema = Joi.object({
 export const updateBillSchema = Joi.object({
   userId: objectIdSchema.optional(),
   companyId: objectIdSchema.optional(),
+  gstPercent: Joi.number().min(0).optional(),
   discount: Joi.number().min(0).optional(),
   items: Joi.array().items(billItemSchema).min(1).optional(),
 }).min(1);

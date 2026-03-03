@@ -1,4 +1,5 @@
 import Joi from "joi";
+import { GST_TYPE } from "../common";
 import {
   addressSchema,
   citySchema,
@@ -11,6 +12,11 @@ import {
   shortStateSchema,
 } from "./common";
 
+const gstTypeSchema = Joi.string()
+  .trim()
+  .uppercase()
+  .valid(GST_TYPE.IGST, GST_TYPE.CGST_SGST, "CGST & SGST");
+
 export const createMedicalStoreSchema = Joi.object({
   name: longNameSchema.required(),
   phone: phoneSchema.required(),
@@ -19,6 +25,7 @@ export const createMedicalStoreSchema = Joi.object({
   city: citySchema.required(),
   pincode: pincodeSchema.required(),
   gstNumber: gstNumberSchema.required(),
+  gstType: gstTypeSchema.required(),
   panCardNumber: panCardSchema.required(),
   isActive: Joi.boolean().optional(),
 });
@@ -31,6 +38,7 @@ export const updateMedicalStoreSchema = Joi.object({
   city: citySchema.optional(),
   pincode: pincodeSchema.optional(),
   gstNumber: gstNumberSchema.optional(),
+  gstType: gstTypeSchema.optional(),
   panCardNumber: panCardSchema.optional(),
   isActive: Joi.boolean().optional(),
 }).min(1);

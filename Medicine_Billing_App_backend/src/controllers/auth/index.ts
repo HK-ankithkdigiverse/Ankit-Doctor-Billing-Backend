@@ -33,6 +33,7 @@ const USER_STORE_POPULATE_FIELDS = [
   "city",
   "pincode",
   "gstNumber",
+  "gstType",
   "panCardNumber",
   "isActive",
 ].join(" ");

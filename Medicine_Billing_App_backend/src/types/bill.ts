@@ -4,10 +4,6 @@ export interface BillInputItem {
   productId: string;
   qty: number;
   freeQty?: number;
-  rate: number;
-  taxPercent?: number;
-  igst?: number;
-  discount?: number;
 }
 
 export interface BillLineItem {
@@ -20,17 +16,13 @@ export interface BillLineItem {
   freeQty: number;
   mrp: number;
   rate: number;
-  taxPercent: number;
-  cgst: number;
-  sgst: number;
-  igst: number;
-  discount: number;
   total: number;
 }
 
 export interface CreateBillBody {
   companyId: string;
   items: BillInputItem[];
+  gstPercent?: number;
   discount?: number;
   userId?: string;
 }
@@ -38,6 +30,7 @@ export interface CreateBillBody {
 export interface UpdateBillBody {
   companyId?: string;
   items?: BillInputItem[];
+  gstPercent?: number;
   discount?: number;
   userId?: string;
 }

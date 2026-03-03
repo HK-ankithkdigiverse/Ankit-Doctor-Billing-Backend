@@ -1,5 +1,5 @@
 ﻿import mongoose, { Document } from "mongoose";
-import { MODEL } from "../../common";
+import { GST_TYPE, MODEL } from "../../common";
 
 export interface IMedicalStore extends Document {
   name: string;
@@ -9,6 +9,7 @@ export interface IMedicalStore extends Document {
   city: string;
   pincode: string;
   gstNumber: string;
+  gstType: GST_TYPE;
   panCardNumber: string;
   isActive: boolean;
   isDeleted: boolean;
@@ -52,6 +53,12 @@ const medicalStoreSchema = new mongoose.Schema<IMedicalStore>(
       trim: true,
       uppercase: true,
       default: "",
+    },
+    gstType: {
+      type: String,
+      enum: Object.values(GST_TYPE),
+      default: GST_TYPE.CGST_SGST,
+      required: true,
     },
     panCardNumber: {
       type: String,

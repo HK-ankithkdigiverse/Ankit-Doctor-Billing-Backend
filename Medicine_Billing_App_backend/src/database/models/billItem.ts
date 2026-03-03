@@ -25,13 +25,6 @@ const billItemSchema = new mongoose.Schema(
 
     mrp: { type: Number, required: true },
     rate: { type: Number, required: true },
-
-    taxPercent: { type: Number, default: 0 },
-    cgst: { type: Number, default: 0 },
-    sgst: { type: Number, default: 0 },
-    igst: { type: Number, default: 0 },
-
-    discount: { type: Number, default: 0 },
     total: { type: Number, required: true },
   },
   { timestamps: true }
