@@ -1,164 +1,90 @@
 import { Response } from "express";
 import User from "../../database/models/auth";
-import { MedicalStoreModel } from "../../database/models/medicalStore";
-import { GST_TYPE, ROLE, StatusCode } from "../../common";
-import {
-  applySearchFilter,
-  countData,
-  createData,
-  getFirstMatch,
-  getPagination,
-  responseMessage,
-  sendCreated,
-  sendError,
-  sendNotFound,
-  sendSuccess,
-  sendUnauthorized,
-} from "../../helper";
-import { AuthRequest } from "../../middleware/auth";
-
-const normalizeValue = (value: unknown) =>
-  typeof value === "string" ? value.trim() : "";
-
-const normalizeGstType = (value: unknown) => {
-  const normalized = normalizeValue(value).toUpperCase();
-  if (normalized === "CGST & SGST") {
-    return GST_TYPE.CGST_SGST;
-  }
-  return normalized;
-};
-
-const normalizeStorePayload = (payload: Record<string, unknown>) => {
-  const nextPayload: Record<string, unknown> = {};
-
-  if (payload.name !== undefined) {
-    nextPayload.name = normalizeValue(payload.name);
-  }
-  if (payload.phone !== undefined) {
-    nextPayload.phone = normalizeValue(payload.phone);
-  }
-  if (payload.address !== undefined) {
-    nextPayload.address = normalizeValue(payload.address);
-  }
-  if (payload.state !== undefined) {
-    nextPayload.state = normalizeValue(payload.state);
-  }
-  if (payload.city !== undefined) {
-    nextPayload.city = normalizeValue(payload.city);
-  }
-  if (payload.pincode !== undefined) {
-    nextPayload.pincode = normalizeValue(payload.pincode);
-  }
-  if (payload.gstNumber !== undefined) {
-    nextPayload.gstNumber = normalizeValue(payload.gstNumber).toUpperCase();
-  }
-  if (payload.gstType !== undefined) {
-    nextPayload.gstType = normalizeGstType(payload.gstType);
-  }
-  if (payload.panCardNumber !== undefined) {
-    nextPayload.panCardNumber = normalizeValue(payload.panCardNumber).toUpperCase();
-  }
-  if (payload.isActive !== undefined) {
-    nextPayload.isActive = Boolean(payload.isActive);
-  }
-
-  return nextPayload;
-};
-
-const getStoreScopeFilter = (req: AuthRequest) => {
-  const filter: Record<string, unknown> = { isDeleted: false };
-  if (req.user?.role !== ROLE.ADMIN) {
-    filter._id = req.user?.medicalStoreId;
-  }
-  return filter;
-};
+import { MedicalStoreModel } from "../../database/models";
+import { ROLE, StatusCode } from "../../common";
+import {countData,createData,findAllWithPopulateWithSorting,getFirstMatch,reqInfo,responseMessage,sendCreated,sendError,sendNotFound,sendSuccess,sendUnauthorized,updateData,} from "../../helper";
+import { AuthRequest } from "../../middleware";
 
 export const createMedicalStore = async (req: AuthRequest, res: Response) => {
+  reqInfo(req);
   try {
-    if (!req.user) {
-      return sendUnauthorized(res, responseMessage.accessDenied);
-    }
+    if (!req.user) return sendUnauthorized(res, responseMessage.accessDenied);
 
-    const payload = normalizeStorePayload(req.body);
+    const payload = req.body as Record<string, unknown>;
 
     const duplicate = await getFirstMatch(
       MedicalStoreModel,
       {
         name: payload.name,
         gstNumber: payload.gstNumber,
-        isDeleted: false,
       },
-      "_id"
+      "_id",
+      {}
     );
 
-    if (duplicate) {
-      return sendError(
-        res,
-        responseMessage.dataAlreadyExist("Medical Store"),
-        null,
-        StatusCode.BAD_REQUEST
-      );
-    }
-
+    if (duplicate) return sendError(res,responseMessage.dataAlreadyExist("Medical Store"),null,StatusCode.BAD_REQUEST);
+    
     const medicalStore = await createData(MedicalStoreModel, {
       ...payload,
       createdBy: req.user._id,
-      isDeleted: false,
       isActive: payload.isActive ?? true,
     });
 
-    return sendCreated(res, responseMessage.addDataSuccess("Medical Store"), {
-      medicalStore,
-    });
+    return sendCreated(res, responseMessage.addDataSuccess("Medical Store"), {medicalStore,});
   } catch (error) {
-    return sendError(
-      res,
-      responseMessage.internalServerError,
-      error,
-      StatusCode.INTERNAL_ERROR
-    );
+    return sendError(res,responseMessage.internalServerError,error,StatusCode.INTERNAL_ERROR);
   }
 };
 
 export const getMedicalStores = async (req: AuthRequest, res: Response) => {
+  reqInfo(req);
   try {
-    const { pageNum, limitNum, skip, searchText } = getPagination(req.query, {
-      page: 1,
-      limit: 10,
-    });
+    const { page, limit, search, startDate, endDate } = req.query as Record<string, string | undefined>;
+    const criteria: Record<string, unknown> = { isDeleted: false };
+    const options: Record<string, unknown> = { lean: true };
 
-    const filter: Record<string, unknown> = getStoreScopeFilter(req);
+    if (req.user?.role !== ROLE.ADMIN) {
+      criteria._id = req.user?.medicalStoreId;
+    }
 
-    applySearchFilter(filter, searchText, [
-      "name",
-      "phone",
-      "address",
-      "state",
-      "city",
-      "pincode",
-      "gstNumber",
-      "gstType",
-      "panCardNumber",
+    if (search) {
+      criteria.$or = [
+        { name: { $regex: search, $options: "si" } },
+        { phone: { $regex: search, $options: "si" } },
+        { address: { $regex: search, $options: "si" } },
+        { state: { $regex: search, $options: "si" } },
+        { city: { $regex: search, $options: "si" } },
+        { pincode: { $regex: search, $options: "si" } },
+        { gstNumber: { $regex: search, $options: "si" } },
+        { gstType: { $regex: search, $options: "si" } },
+        { panCardNumber: { $regex: search, $options: "si" } },
+      ];
+    }
+
+    if (startDate && endDate) criteria.createdAt = { $gte: new Date(startDate), $lte: new Date(endDate) };
+
+    options.sort = { createdAt: -1 };
+    if (page && limit) {
+      options.skip = (parseInt(page) - 1) * parseInt(limit);
+      options.limit = parseInt(limit);
+    }
+
+    const populate = [{ path: "createdBy", select: "name email role medicalStoreId" }];
+    const [medicalStores, totalCount] = await Promise.all([
+      findAllWithPopulateWithSorting(MedicalStoreModel, criteria, {}, options, populate),
+      countData(MedicalStoreModel, criteria),
     ]);
 
-    const [medicalStores, total] = await Promise.all([
-      MedicalStoreModel.find(filter)
-        .populate("createdBy", "name email role medicalStoreId")
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limitNum)
-        .lean(),
-      countData(MedicalStoreModel, filter),
-    ]);
+    const stateObj = {
+      page: parseInt(page || "") || 1,
+      limit: parseInt(limit || "") || totalCount,
+      page_limit: Math.ceil(totalCount / (parseInt(limit || "") || totalCount)) || 1,
+    };
 
     return sendSuccess(res, "Medical stores fetched successfully", {
-      medicalStores,
-      pagination: {
-        total,
-        page: pageNum,
-        limit: limitNum,
-        totalPages: Math.ceil(total / limitNum),
-      },
+      medicalStore_data: medicalStores,
+      totalData: totalCount,
+      state: stateObj,
     });
   } catch (error) {
     return sendError(
@@ -171,21 +97,17 @@ export const getMedicalStores = async (req: AuthRequest, res: Response) => {
 };
 
 export const getMedicalStoreById = async (req: AuthRequest, res: Response) => {
+  reqInfo(req);
   try {
-    const filter: Record<string, unknown> = {
-      _id: req.params.id,
-      ...getStoreScopeFilter(req),
-    };
-
-    const medicalStore = await MedicalStoreModel.findOne(filter)
-      .populate("createdBy", "name email role medicalStoreId")
-      .lean();
-
-    if (!medicalStore) {
-      return sendNotFound(res, responseMessage.getDataNotFound("Medical Store"));
+    const criteria: Record<string, unknown> = { _id: req.params.id, isDeleted: false };
+    if (req.user?.role !== ROLE.ADMIN) {
+      criteria._id = req.user?.medicalStoreId;
     }
 
-    return sendSuccess(res, "Medical store fetched successfully", { medicalStore });
+    const response = await getFirstMatch(MedicalStoreModel, criteria, {}, {});
+
+    if (!response) return sendNotFound(res, responseMessage.getDataNotFound("Medical Store"));
+    return sendSuccess(res, "Medical store fetched successfully", response);
   } catch (error) {
     return sendError(
       res,
@@ -197,16 +119,18 @@ export const getMedicalStoreById = async (req: AuthRequest, res: Response) => {
 };
 
 export const updateMedicalStore = async (req: AuthRequest, res: Response) => {
+  reqInfo(req);
   try {
-    const payload = normalizeStorePayload(req.body);
-    const medicalStore = await MedicalStoreModel.findOne({
+    const payload = req.body as Record<string, unknown>;
+    const criteria: Record<string, unknown> = {
       _id: req.params.id,
       isDeleted: false,
-    });
+    };
+    if (req.user?.role !== ROLE.ADMIN) criteria._id = req.user?.medicalStoreId;
+  
+    const medicalStore = await getFirstMatch(MedicalStoreModel, criteria, {}, {});
 
-    if (!medicalStore) {
-      return sendNotFound(res, responseMessage.getDataNotFound("Medical Store"));
-    }
+    if (!medicalStore) return sendNotFound(res, responseMessage.getDataNotFound("Medical Store"));
 
     const nextName = payload.name ?? medicalStore.name;
     const nextGstNumber = payload.gstNumber ?? medicalStore.gstNumber;
@@ -219,7 +143,8 @@ export const updateMedicalStore = async (req: AuthRequest, res: Response) => {
         gstNumber: nextGstNumber,
         isDeleted: false,
       },
-      "_id"
+      "_id",
+      {}
     );
 
     if (duplicate) {
@@ -231,11 +156,10 @@ export const updateMedicalStore = async (req: AuthRequest, res: Response) => {
       );
     }
 
-    medicalStore.set(payload);
-    await medicalStore.save();
+    const response = await updateData(MedicalStoreModel, criteria, payload, {});
 
     return sendSuccess(res, responseMessage.updateDataSuccess("Medical Store"), {
-      medicalStore,
+      medicalStore: response,
     });
   } catch (error) {
     return sendError(
@@ -248,20 +172,23 @@ export const updateMedicalStore = async (req: AuthRequest, res: Response) => {
 };
 
 export const deleteMedicalStore = async (req: AuthRequest, res: Response) => {
+  reqInfo(req);
   try {
-    const medicalStore = await MedicalStoreModel.findOne({
+    const criteria: Record<string, unknown> = {
       _id: req.params.id,
       isDeleted: false,
-    });
+    };
+    if (req.user?.role !== ROLE.ADMIN)criteria._id = req.user?.medicalStoreId;
 
-    if (!medicalStore) {
-      return sendNotFound(res, responseMessage.getDataNotFound("Medical Store"));
-    }
+    const medicalStore = await getFirstMatch(MedicalStoreModel, criteria, {}, {});
 
+    if (!medicalStore) return sendNotFound(res, responseMessage.getDataNotFound("Medical Store"));
+  
     const assignedUser = await getFirstMatch(
       User,
       { medicalStoreId: req.params.id, isDeleted: false },
-      "_id"
+      "_id",
+      {}
     );
 
     if (assignedUser) {
@@ -273,11 +200,16 @@ export const deleteMedicalStore = async (req: AuthRequest, res: Response) => {
       );
     }
 
-    medicalStore.isDeleted = true;
-    medicalStore.isActive = false;
-    await medicalStore.save();
+    const response = await updateData(
+      MedicalStoreModel,
+      criteria,
+      { isDeleted: true, isActive: false },
+      { new: true }
+    );
 
-    return sendSuccess(res, responseMessage.deleteDataSuccess("Medical Store"));
+    return sendSuccess(res, responseMessage.deleteDataSuccess("Medical Store"), {
+      medicalStore: response,
+    });
   } catch (error) {
     return sendError(
       res,

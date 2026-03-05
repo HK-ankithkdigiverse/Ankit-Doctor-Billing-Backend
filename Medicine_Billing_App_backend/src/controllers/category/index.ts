@@ -1,102 +1,42 @@
-﻿import { Response } from "express";
+import { Response } from "express";
 import { CategoryModel } from "../../database/models/category";
-import {
-  ROLE,
-  StatusCode,
-} from "../../common";
-import {
-  applySearchFilter,
-  countData,
-  createData,
-  getFirstMatch,
-  getPagination,
-  responseMessage,
-  sendError,
-  sendNotFound,
-  sendSuccess,
-  sendUnauthorized,
-} from "../../helper";
+import { ROLE, StatusCode } from "../../common";
+import {countData,createData,findAllWithPopulateWithSorting,findOneAndPopulate,getFirstMatch,reqInfo,responseMessage,sendError,sendNotFound,sendSuccess,sendUnauthorized,updateData,} from "../../helper";
 import { AuthRequest } from "../../middleware/auth";
 
-const normalizeCategoryName = (name: string) => name.trim().toLowerCase();
-
-const normalizeCategoryDescription = (description: unknown) =>
-  typeof description === "string" ? description.trim() : "";
-
-const safeText = (value: unknown) => (typeof value === "string" ? value : "");
-
-const mapCategoryItem = (category: any) => ({
-  _id: category._id,
-  name: category.name,
-  description: category.description || "",
-  isActive: category.isActive,
-  isDeleted: category.isDeleted,
-  createdBy: category.createdBy,
-  medicalStoreId: category.medicalStoreId || "",
-  createdAt: category.createdAt,
-  updatedAt: category.updatedAt,
-});
-
 const getCategoryScopeFilter = (req: AuthRequest) => {
-  const filter: any = { isDeleted: false };
-
+  const filter: Record<string, unknown> = { isDeleted: false };
   if (req.user?.role !== ROLE.ADMIN) {
     filter.medicalStoreId = req.user?.medicalStoreId;
   }
-
   return filter;
 };
 
-const canAccessCategory = (category: any, req: AuthRequest) => {
-  if (req.user?.role === ROLE.ADMIN) {
-    return true;
-  }
-
-  if (!req.user) {
-    return false;
-  }
-
-  return (
-    Boolean(category.medicalStoreId) &&
-    String(category.medicalStoreId) === String(req.user.medicalStoreId)
-  );
-};
-
-const buildDuplicateCategoryFilter = (
-  id: string,
-  name: string,
-  medicalStoreId: string
-) => ({
-  _id: { $ne: id },
-  name,
-  isDeleted: false,
-  medicalStoreId,
-});
-
 /* ================= CREATE CATEGORY ================= */
 export const createCategory = async (req: AuthRequest, res: Response) => {
+  reqInfo(req);
   try {
-    if (!req.user) {
-      return sendUnauthorized(res, "Unauthorized");
-    }
-
-    const { name, description } = req.body;
+    if (!req.user) return sendUnauthorized(res, responseMessage.accessDenied);
+  
+    const { name, description } = req.body as { name: string; description?: string };
     const medicalStoreId = req.user.medicalStoreId;
 
-    const normalizedName = normalizeCategoryName(name);
-    const normalizedDescription = normalizeCategoryDescription(description);
+    if (!medicalStoreId) return sendError(res, responseMessage.medicalIdNotAssigned, null, StatusCode.BAD_REQUEST);
 
-    const existing = await getFirstMatch(CategoryModel, {
-      name: normalizedName,
-      isDeleted: false,
-      medicalStoreId,
-    });
+    const normalizedName = String(name).trim().toLowerCase();
+    const normalizedDescription = typeof description === "string" ? description.trim() : "";
 
+    const existing = await getFirstMatch(
+      CategoryModel,
+      { name: normalizedName, isDeleted: false, medicalStoreId },
+      "_id",
+      {}
+    );
     if (existing) {
       return sendError(res, responseMessage.categoryAlreadyExists, null, StatusCode.BAD_REQUEST);
     }
 
-    const createdCategory: any = await createData(CategoryModel, {
+    const createdCategory = await createData(CategoryModel, {
       createdBy: req.user._id,
       medicalStoreId,
       name: normalizedName,
@@ -104,178 +44,246 @@ export const createCategory = async (req: AuthRequest, res: Response) => {
       isDeleted: false,
     });
 
-    await createdCategory.populate("createdBy", "name email role medicalStoreId");
-
     return sendSuccess(res, responseMessage.addDataSuccess("Category"), {
-      category: mapCategoryItem(createdCategory),
+      category: {
+        _id: createdCategory._id,
+        name: createdCategory.name,
+        description: createdCategory.description || "",
+        isActive: createdCategory.isActive,
+        isDeleted: createdCategory.isDeleted,
+        createdBy: createdCategory.createdBy,
+        medicalStoreId: createdCategory.medicalStoreId || "",
+        createdAt: createdCategory.createdAt,
+        updatedAt: createdCategory.updatedAt,
+      },
     });
   } catch (error) {
-    console.error("CREATE CATEGORY ERROR", error);
     return sendError(res, responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR);
   }
 };
 
 /* ================= GET ALL CATEGORIES ================= */
 export const getCategories = async (req: AuthRequest, res: Response) => {
+  reqInfo(req);
   try {
-    const { pageNum, limitNum, skip, searchText } = getPagination(req.query, {
-      page: 1,
-      limit: 10,
-    });
+    const { page, limit, search, startDate, endDate } = req.query as Record<string, string | undefined>;
+    const criteria: Record<string, unknown> = getCategoryScopeFilter(req);
+    const options: Record<string, unknown> = { lean: true };
 
-    const filter: any = getCategoryScopeFilter(req);
-    applySearchFilter(filter, searchText, ["name", "description"]);
+    if (search) {
+      criteria.$or = [
+        { name: { $regex: search, $options: "si" } },
+        { description: { $regex: search, $options: "si" } },
+      ];
+    }
 
-    const [categories, total] = await Promise.all([
-      CategoryModel.find(filter)
-        .populate("createdBy", "name email role medicalStoreId")
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limitNum)
-        .lean(),
-      countData(CategoryModel, filter),
+    if (startDate && endDate)criteria.createdAt = { $gte: new Date(startDate), $lte: new Date(endDate) };
+
+    options.sort = { createdAt: -1 };
+    if (page && limit) {
+      options.skip = (parseInt(page) - 1) * parseInt(limit);
+      options.limit = parseInt(limit);
+    }
+
+    const populate = [{ path: "createdBy", select: "name email role medicalStoreId" }];
+    const [categories, totalCount] = await Promise.all([
+      findAllWithPopulateWithSorting(CategoryModel, criteria, {}, options, populate),
+      countData(CategoryModel, criteria),
     ]);
 
+    const stateObj = {
+      page: parseInt(page || "") || 1,
+      limit: parseInt(limit || "") || totalCount,
+      page_limit: Math.ceil(totalCount / (parseInt(limit || "") || totalCount)) || 1,
+    };
+
     return sendSuccess(res, "Categories fetched successfully", {
-      categories: categories.map(mapCategoryItem),
-      pagination: {
-        total,
-        page: pageNum,
-        limit: limitNum,
-        totalPages: Math.ceil(total / limitNum),
-      },
+      category_data: categories.map((category: any) => ({
+        _id: category._id,
+        name: category.name,
+        description: category.description || "",
+        isActive: category.isActive,
+        isDeleted: category.isDeleted,
+        createdBy: category.createdBy,
+        medicalStoreId: category.medicalStoreId || "",
+        createdAt: category.createdAt,
+        updatedAt: category.updatedAt,
+      })),
+      totalData: totalCount,
+      state: stateObj,
     });
   } catch (error) {
-    console.error("GET CATEGORIES ERROR", error);
     return sendError(res, responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR);
   }
 };
 
 /* ================= GET CATEGORY BY ID ================= */
 export const getCategoryById = async (req: AuthRequest, res: Response) => {
+  reqInfo(req);
   try {
-    const { id } = req.params;
+    if (!req.user) {
+      return sendUnauthorized(res, responseMessage.accessDenied);
+    }
 
-    const filter: any = {
-      _id: id,
+    const criteria: Record<string, unknown> = {
+      _id: req.params.id,
       ...getCategoryScopeFilter(req),
     };
 
-    const category = await CategoryModel.findOne(filter)
-      .populate("createdBy", "name email role medicalStoreId")
-      .lean();
-
+    const category = await findOneAndPopulate(
+      CategoryModel,
+      criteria,
+      undefined,
+      {},
+      [{ path: "createdBy", select: "name email role medicalStoreId" }]
+    );
     if (!category) {
       return sendNotFound(res, responseMessage.getDataNotFound("Category"));
     }
 
-    return sendSuccess(res, "Category fetched successfully", mapCategoryItem(category));
+    return sendSuccess(res, "Category fetched successfully", {
+      _id: category._id,
+      name: category.name,
+      description: category.description || "",
+      isActive: category.isActive,
+      isDeleted: category.isDeleted,
+      createdBy: category.createdBy,
+      medicalStoreId: category.medicalStoreId || "",
+      createdAt: category.createdAt,
+      updatedAt: category.updatedAt,
+    });
   } catch (error) {
-    console.error("GET CATEGORY BY ID ERROR", error);
     return sendError(res, responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR);
   }
 };
 
 /* ================= UPDATE CATEGORY ================= */
 export const updateCategory = async (req: AuthRequest, res: Response) => {
+  reqInfo(req);
   try {
+    if (!req.user) {
+      return sendUnauthorized(res, responseMessage.accessDenied);
+    }
+
     const { id } = req.params;
-    const { name, description } = req.body;
+    const payload = { ...(req.body as Record<string, unknown>) };
 
-    const category = await CategoryModel.findOne({ _id: id, isDeleted: false });
+    const criteria: Record<string, unknown> = {
+      _id: id,
+      ...getCategoryScopeFilter(req),
+    };
 
+    const category = await getFirstMatch(CategoryModel, criteria, "_id name medicalStoreId", {});
     if (!category) {
       return sendNotFound(res, responseMessage.getDataNotFound("Category"));
     }
 
-    if (!canAccessCategory(category, req)) {
-      return sendError(res, responseMessage.notAuthorized, null, StatusCode.FORBIDDEN);
-    }
-
-    if (name !== undefined) {
-      const normalizedName = normalizeCategoryName(name);
-      const medicalStoreId = category.medicalStoreId
-        ? String(category.medicalStoreId)
-        : "";
+    if (payload.name !== undefined) {
+      const normalizedName = String(payload.name).trim().toLowerCase();
+      const medicalStoreId = category.medicalStoreId ? String(category.medicalStoreId) : "";
       if (!medicalStoreId) {
         return sendError(res, responseMessage.medicalIdNotAssigned, null, StatusCode.BAD_REQUEST);
       }
 
-      const duplicateFilter: any = buildDuplicateCategoryFilter(
-        id,
-        normalizedName,
-        medicalStoreId
+      const duplicate = await getFirstMatch(
+        CategoryModel,
+        {
+          _id: { $ne: id },
+          name: normalizedName,
+          isDeleted: false,
+          medicalStoreId,
+        },
+        "_id",
+        {}
       );
-
-      const duplicate = await getFirstMatch(CategoryModel, duplicateFilter);
 
       if (duplicate) {
         return sendError(res, responseMessage.categoryNameAlreadyExists, null, StatusCode.BAD_REQUEST);
       }
-
-      category.name = normalizedName;
+      payload.name = normalizedName;
     }
 
-    if (description !== undefined) {
-      category.description = normalizeCategoryDescription(description);
+    if (payload.description !== undefined) {
+      payload.description = typeof payload.description === "string" ? payload.description.trim() : "";
     }
 
-    await category.save();
-    await category.populate("createdBy", "name email role medicalStoreId");
+    const response = await updateData(CategoryModel, criteria, payload, {});
+    if (!response) {
+      return sendNotFound(res, responseMessage.getDataNotFound("Category"));
+    }
+
+    const populated = await findOneAndPopulate(
+      CategoryModel,
+      { _id: response._id, isDeleted: false },
+      undefined,
+      {},
+      [{ path: "createdBy", select: "name email role medicalStoreId" }]
+    );
 
     return sendSuccess(res, responseMessage.updateDataSuccess("Category"), {
-      category: mapCategoryItem(category),
+      category: {
+        _id: (populated || response)._id,
+        name: (populated || response).name,
+        description: (populated || response).description || "",
+        isActive: (populated || response).isActive,
+        isDeleted: (populated || response).isDeleted,
+        createdBy: (populated || response).createdBy,
+        medicalStoreId: (populated || response).medicalStoreId || "",
+        createdAt: (populated || response).createdAt,
+        updatedAt: (populated || response).updatedAt,
+      },
     });
   } catch (error) {
-    console.error("UPDATE CATEGORY ERROR", error);
     return sendError(res, responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR);
   }
 };
 
 /* ================= DELETE CATEGORY ================= */
 export const deleteCategory = async (req: AuthRequest, res: Response) => {
+  reqInfo(req);
   try {
-    const { id } = req.params;
+    if (!req.user) {
+      return sendUnauthorized(res, responseMessage.accessDenied);
+    }
 
-    const category = await CategoryModel.findOne({ _id: id, isDeleted: false })
-      .select("_id createdBy medicalStoreId")
-      .lean();
+    const criteria: Record<string, unknown> = {
+      _id: req.params.id,
+      ...getCategoryScopeFilter(req),
+    };
 
+    const category = await getFirstMatch(CategoryModel, criteria, "_id", {});
     if (!category) {
       return sendNotFound(res, responseMessage.getDataNotFound("Category"));
     }
 
-    if (!canAccessCategory(category, req)) {
-      return sendError(res, responseMessage.notAuthorized, null, StatusCode.FORBIDDEN);
+    const response = await updateData(CategoryModel, criteria, { isDeleted: true }, { new: true });
+    if (!response) {
+      return sendNotFound(res, responseMessage.getDataNotFound("Category"));
     }
 
-    await CategoryModel.findByIdAndUpdate(id, { $set: { isDeleted: true } });
-
-    return sendSuccess(res, responseMessage.deleteDataSuccess("Category"));
+    return sendSuccess(res, responseMessage.deleteDataSuccess("Category"), { category: response });
   } catch (error) {
-    console.error("DELETE CATEGORY ERROR", error);
     return sendError(res, responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR);
   }
 };
 
-export const getActiveCategoriesForDropdown = async (
-  req: AuthRequest,
-  res: Response
-) => {
+export const getActiveCategoriesForDropdown = async (req: AuthRequest, res: Response) => {
+  reqInfo(req);
   try {
-    const filter: any = getCategoryScopeFilter(req);
-    filter.isActive = true;
+    const criteria: Record<string, unknown> = {
+      ...getCategoryScopeFilter(req),
+      isActive: true,
+    };
 
     const categories = (
-      await CategoryModel.find(filter).select("_id name").sort({ name: 1 }).lean()
+      await CategoryModel.find(criteria).select("_id name").sort({ name: 1 }).lean()
     ).map((cat: any) => ({
       _id: cat._id,
-      name: safeText(cat.name),
+      name: typeof cat.name === "string" ? cat.name : "",
     }));
 
     return sendSuccess(res, "Categories fetched successfully", { categories });
   } catch (error) {
-    console.error("GET CATEGORY DROPDOWN ERROR", error);
     return sendError(res, responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR);
   }
 };

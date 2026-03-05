@@ -7,13 +7,16 @@ import {
   email_verification_mail,
   generateToken,
   getFirstMatch,
+  reqInfo,
   responseMessage,
+  sendCreated,
   sendError,
   sendNotFound,
   sendSuccess,
+  sendUnauthorized,
   updateData,
 } from "../../helper";
-import { ApiResponse, ROLE, StatusCode } from "../../common";
+import { ROLE, StatusCode } from "../../common";
 import bcrypt from "bcryptjs";
 import { AuthRequest } from "../../middleware/auth";
 import {
@@ -40,6 +43,7 @@ const USER_STORE_POPULATE_FIELDS = [
 
 // ADMIN -> CREATE USER
 export const adminCreateUser = async (req: AuthRequest, res: Response) => {
+  reqInfo(req);
   try {
     const {
       name,
@@ -53,11 +57,14 @@ export const adminCreateUser = async (req: AuthRequest, res: Response) => {
 
     const normalizedEmail = email.toLowerCase().trim();
 
-    const existingUser = await getFirstMatch(User, { email: normalizedEmail });
+    const existingUser = await getFirstMatch(User, { email: normalizedEmail }, "", {});
     if (existingUser) {
-      return res
-        .status(StatusCode.BAD_REQUEST)
-        .json(ApiResponse.error(responseMessage.dataAlreadyExist("User"), null, StatusCode.BAD_REQUEST));
+      return sendError(
+        res,
+        responseMessage.dataAlreadyExist("User"),
+        null,
+        StatusCode.BAD_REQUEST
+      );
     }
 
     // if a medicalStoreId is supplied, ensure it points to a valid store regardless of role
@@ -65,7 +72,8 @@ export const adminCreateUser = async (req: AuthRequest, res: Response) => {
       const store = await getFirstMatch(
         MedicalStoreModel,
         { _id: medicalStoreId, isDeleted: false },
-        "_id"
+        "_id",
+        {}
       );
 
       if (!store) {
@@ -100,7 +108,7 @@ export const adminCreateUser = async (req: AuthRequest, res: Response) => {
       .populate("medicalStoreId", USER_STORE_POPULATE_FIELDS)
       .lean();
 
-    return res.status(StatusCode.CREATED).json(ApiResponse.created(responseMessage.signupSuccess, { user: safeUser }));
+    return sendCreated(res, responseMessage.signupSuccess, { user: safeUser });
   } catch (error) {
     console.error("CREATE USER ERROR", error);
     return sendError(res, responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR);
@@ -109,25 +117,23 @@ export const adminCreateUser = async (req: AuthRequest, res: Response) => {
 
 /* ================= LOGIN ================= */
 export const login = async (req: Request, res: Response) => {
+  reqInfo(req);
   try {
     const { email, password } = req.body as LoginBody;
     const normalizedEmail = email.toLowerCase().trim();
 
-    const user = await getFirstMatch(User, { email: normalizedEmail });
+    const user = await getFirstMatch(User, { email: normalizedEmail }, "", {});
     if (!user) {
-      return res.status(StatusCode.BAD_REQUEST).json({
-        ...ApiResponse.error(
-          responseMessage.invalidUserPasswordEmail,
-          null,
-          StatusCode.BAD_REQUEST
-        ),
-      });
+      return sendError(
+        res,
+        responseMessage.invalidUserPasswordEmail,
+        null,
+        StatusCode.BAD_REQUEST
+      );
     }
 
     if (user.isActive === false) {
-      return res
-        .status(StatusCode.FORBIDDEN)
-        .json(ApiResponse.error(responseMessage.accountInactive, null, StatusCode.FORBIDDEN));
+      return sendError(res, responseMessage.accountInactive, null, StatusCode.FORBIDDEN);
     }
 
     const normalizedMedicalStoreId = user.medicalStoreId
@@ -135,20 +141,17 @@ export const login = async (req: Request, res: Response) => {
       : "";
     // administrators are not required to have a store when logging in
     if (user.role !== ROLE.ADMIN && !normalizedMedicalStoreId) {
-      return res
-        .status(StatusCode.FORBIDDEN)
-        .json(ApiResponse.error(responseMessage.medicalIdNotAssigned, null, StatusCode.FORBIDDEN));
+      return sendError(res, responseMessage.medicalIdNotAssigned, null, StatusCode.FORBIDDEN);
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return res.status(StatusCode.BAD_REQUEST).json({
-        ...ApiResponse.error(
-          responseMessage.invalidUserPasswordEmail,
-          null,
-          StatusCode.BAD_REQUEST
-        ),
-      });
+      return sendError(
+        res,
+        responseMessage.invalidUserPasswordEmail,
+        null,
+        StatusCode.BAD_REQUEST
+      );
     }
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -163,9 +166,7 @@ export const login = async (req: Request, res: Response) => {
     const sent = await email_verification_mail(normalizedEmail, otp);
     if (!sent) {
       await Otp.deleteMany({ email: normalizedEmail });
-      return res
-        .status(StatusCode.INTERNAL_ERROR)
-        .json(ApiResponse.error(responseMessage.otpSendFailed, null, StatusCode.INTERNAL_ERROR));
+      return sendError(res, responseMessage.otpSendFailed, null, StatusCode.INTERNAL_ERROR);
     }
 
     return sendSuccess(res, responseMessage.otpSent);
@@ -177,30 +178,30 @@ export const login = async (req: Request, res: Response) => {
 
 /* ================= VERIFY OTP ================= */
 export const verifyOtp = async (req: Request, res: Response) => {
+  reqInfo(req);
   try {
     const { email, otp } = req.body as VerifyOtpBody;
     const normalizedEmail = email.toLowerCase().trim();
 
-    const otpRecord = await getFirstMatch(Otp, { email: normalizedEmail, otp });
+    const otpRecord = await getFirstMatch(Otp, { email: normalizedEmail, otp }, "", {});
     if (!otpRecord || otpRecord.expireAt < new Date()) {
-      return res
-        .status(StatusCode.BAD_REQUEST)
-        .json(ApiResponse.error(responseMessage.invalidToken, null, StatusCode.BAD_REQUEST));
+      return sendError(res, responseMessage.invalidToken, null, StatusCode.BAD_REQUEST);
     }
 
     await Otp.deleteMany({ email: normalizedEmail });
 
-    const user = await getFirstMatch(User, { email: normalizedEmail });
+    const user = await getFirstMatch(User, { email: normalizedEmail }, "", {});
     if (!user) {
-      return res
-        .status(StatusCode.BAD_REQUEST)
-        .json(ApiResponse.error(responseMessage.getDataNotFound("User"), null, StatusCode.BAD_REQUEST));
+      return sendError(
+        res,
+        responseMessage.getDataNotFound("User"),
+        null,
+        StatusCode.BAD_REQUEST
+      );
     }
 
     if (user.isActive === false) {
-      return res
-        .status(StatusCode.FORBIDDEN)
-        .json(ApiResponse.error(responseMessage.accountInactive, null, StatusCode.FORBIDDEN));
+      return sendError(res, responseMessage.accountInactive, null, StatusCode.FORBIDDEN);
     }
 
     const normalizedMedicalStoreId = user.medicalStoreId
@@ -208,9 +209,7 @@ export const verifyOtp = async (req: Request, res: Response) => {
       : "";
     // allow admin without store
     if (user.role !== ROLE.ADMIN && !normalizedMedicalStoreId) {
-      return res
-        .status(StatusCode.FORBIDDEN)
-        .json(ApiResponse.error(responseMessage.medicalIdNotAssigned, null, StatusCode.FORBIDDEN));
+      return sendError(res, responseMessage.medicalIdNotAssigned, null, StatusCode.FORBIDDEN);
     }
 
     const tokenPayload: any = {
@@ -244,7 +243,12 @@ export const verifyOtp = async (req: Request, res: Response) => {
 };
 
 export const changePassword = async (req: AuthRequest, res: Response) => {
+  reqInfo(req);
   try {
+    if (!req.user) {
+      return sendUnauthorized(res, responseMessage.accessDenied);
+    }
+
     const userId = req.user._id;
     const { oldPassword, newPassword } = req.body as ChangePasswordBody;
 
@@ -255,9 +259,12 @@ export const changePassword = async (req: AuthRequest, res: Response) => {
 
     const isMatch = await bcrypt.compare(oldPassword, user.password);
     if (!isMatch) {
-      return res
-        .status(StatusCode.BAD_REQUEST)
-        .json(ApiResponse.error(responseMessage.invalidUserPasswordEmail, null, StatusCode.BAD_REQUEST));
+      return sendError(
+        res,
+        responseMessage.invalidUserPasswordEmail,
+        null,
+        StatusCode.BAD_REQUEST
+      );
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 12);
@@ -272,11 +279,12 @@ export const changePassword = async (req: AuthRequest, res: Response) => {
 };
 
 export const forgotPassword = async (req: Request, res: Response) => {
+  reqInfo(req);
   try {
     const { email } = req.body as ForgotPasswordBody;
     const normalizedEmail = email.toLowerCase().trim();
 
-    const user = await getFirstMatch(User, { email: normalizedEmail });
+    const user = await getFirstMatch(User, { email: normalizedEmail }, "", {});
     if (!user) {
       return sendNotFound(res, responseMessage.getDataNotFound("User"));
     }
@@ -293,9 +301,7 @@ export const forgotPassword = async (req: Request, res: Response) => {
     const sent = await email_verification_mail(normalizedEmail, otp);
     if (!sent) {
       await Otp.deleteMany({ email: normalizedEmail });
-      return res
-        .status(StatusCode.INTERNAL_ERROR)
-        .json(ApiResponse.error(responseMessage.otpSendFailed, null, StatusCode.INTERNAL_ERROR));
+      return sendError(res, responseMessage.otpSendFailed, null, StatusCode.INTERNAL_ERROR);
     }
 
     return sendSuccess(res, responseMessage.otpSent);
@@ -305,15 +311,14 @@ export const forgotPassword = async (req: Request, res: Response) => {
 };
 
 export const resetPassword = async (req: Request, res: Response) => {
+  reqInfo(req);
   try {
     const { email, otp, newPassword } = req.body as ResetPasswordBody;
     const normalizedEmail = email.toLowerCase().trim();
 
-    const otpRecord = await getFirstMatch(Otp, { email: normalizedEmail, otp });
+    const otpRecord = await getFirstMatch(Otp, { email: normalizedEmail, otp }, "", {});
     if (!otpRecord || otpRecord.expireAt < new Date()) {
-      return res
-        .status(StatusCode.BAD_REQUEST)
-        .json(ApiResponse.error(responseMessage.invalidToken, null, StatusCode.BAD_REQUEST));
+      return sendError(res, responseMessage.invalidToken, null, StatusCode.BAD_REQUEST);
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 12);
@@ -321,7 +326,8 @@ export const resetPassword = async (req: Request, res: Response) => {
     await updateData(
       User,
       { email: normalizedEmail },
-      { password: hashedPassword }
+      { password: hashedPassword },
+      {},
     );
 
     await Otp.deleteMany({ email: normalizedEmail });
@@ -333,13 +339,19 @@ export const resetPassword = async (req: Request, res: Response) => {
 };
 
 /* ================= LOGOUT ================= */
-export const logout = (_req: Request, res: Response) => {
+export const logout = (req: Request, res: Response) => {
+  reqInfo(req);
   return sendSuccess(res, responseMessage.logout);
 };
 
 /* ================= GET ME ================= */
 export const getMe = async (req: AuthRequest, res: Response) => {
+  reqInfo(req);
   try {
+    if (!req.user) {
+      return sendUnauthorized(res, responseMessage.accessDenied);
+    }
+
     const user = await User.findById(req.user._id)
       .select("-password")
       .populate("medicalStoreId", USER_STORE_POPULATE_FIELDS)

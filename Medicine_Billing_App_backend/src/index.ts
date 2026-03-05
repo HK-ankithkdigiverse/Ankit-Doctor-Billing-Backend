@@ -5,6 +5,7 @@ import apiRoutes from "./routes";
 import cookieParser from "cookie-parser";
 import { sharedUploadDir } from "./common/uploadPath";
 import { handleUploadError } from "./middleware/upload";
+import { reqInfo } from "./helper";
 
 const app = express();
 
@@ -15,6 +16,11 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use((req, res, next) => {
   res.setHeader("Cache-Control", "no-store");
+  next();
+});
+
+app.use((req, _res, next) => {
+  void reqInfo(req);
   next();
 });
 

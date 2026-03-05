@@ -9,10 +9,10 @@ import { authMiddleware } from "../middleware/auth";
 
 const router = Router();
 
-router.post("/", upload.array("files"), handleUploadError, uploadImages);
+router.post("/", authMiddleware, upload.array("files"), handleUploadError, uploadImages);
 
 
-router.get("/", getImages);
+router.get("/", authMiddleware, getImages);
 
 
 router.delete("/", authMiddleware, deleteImage);

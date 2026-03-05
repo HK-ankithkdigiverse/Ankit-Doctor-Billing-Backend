@@ -1,92 +1,83 @@
 ﻿import { Response } from "express";
-import { CompanyModel } from "../../database/models/company";
+import { CompanyModel } from "../../database";
 import { ROLE, StatusCode } from "../../common";
-import {
-  applySearchFilter,
-  countData,
-  createData,
-  getPagination,
-  responseMessage,
-  sendCreated,
-  sendError,
-  sendNotFound,
-  sendSuccess,
-  sendUnauthorized,
-  updateData,
-} from "../../helper";
-import { AuthRequest } from "../../middleware/auth";
-import { CompanyPayload } from "../../types/company";
+import { countData, createData, findAllWithPopulateWithSorting, getFirstMatch, reqInfo, responseMessage, sendError, sendNotFound, sendSuccess, sendUnauthorized, updateData } from "../../helper";
+import { AuthRequest } from "../../middleware";
 
-const getLogoFilenameFromRequest = (req: AuthRequest): string | undefined => {
-  const files = req.files as
-    | Express.Multer.File[]
-    | { [fieldname: string]: Express.Multer.File[] }
-    | undefined;
-
-  if (!files) {
-    return undefined;
+const getUploadedLogoPath = (req: AuthRequest) => {
+  const files = (req as AuthRequest & { files?: Express.Multer.File[] }).files;
+  if (Array.isArray(files) && files.length > 0) {
+    return `uploads/${files[0].filename}`;
   }
-
-  if (Array.isArray(files)) {
-    return files[0]?.filename;
-  }
-
-  return files.logo?.[0]?.filename;
+  return undefined;
 };
 
-const getCompanyScopeFilter = (req: AuthRequest) => {
-  const filter: Record<string, unknown> = { isDeleted: false };
-
-  if (req.user?.role !== ROLE.ADMIN) {
-    filter.medicalStoreId = req.user?.medicalStoreId;
-  }
-
-  return filter;
-};
-
-const canAccessCompany = (company: any, req: AuthRequest) => {
-  if (req.user?.role === ROLE.ADMIN) {
-    return true;
-  }
-
-  if (!req.user) {
-    return false;
-  }
-
-  return (
-    Boolean(company.medicalStoreId) &&
-    String(company.medicalStoreId) === String(req.user.medicalStoreId)
-  );
-};
 
 // ================= CREATE =================
 export const createCompany = async (
   req: AuthRequest,
   res: Response
 ) => {
+  reqInfo(req);
   try {
     if (!req.user) {
       return sendUnauthorized(res, responseMessage.accessDenied);
     }
 
-    const { name: rawName, companyName, gstNumber, address, phone, email, state } = req.body as CompanyPayload;
-    const name = rawName || companyName;
-    const logoFilename = getLogoFilenameFromRequest(req);
+    const payload = req.body as Record<string, unknown>;
+    const logoPath = getUploadedLogoPath(req);
+    const medicalStoreId =
+      req.user.role === ROLE.ADMIN
+        ? payload.medicalStoreId || req.user.medicalStoreId
+        : req.user.medicalStoreId;
 
-    const newCompany = await createData(CompanyModel, {
-      userId: req.user._id,
-      medicalStoreId: req.user.medicalStoreId,
-      name,
-      gstNumber,
-      address,
-      phone,
-      email,
-      state,
-      logo: logoFilename,
+    if (!medicalStoreId) {
+      return sendError(
+        res,
+        responseMessage.medicalIdNotAssigned,
+        null,
+        StatusCode.BAD_REQUEST
+      );
+    }
+
+    const duplicateCriteria: Record<string, unknown> = {
+      medicalStoreId,
       isDeleted: false,
+      $or: [],
+    };
+    const orList = duplicateCriteria.$or as Record<string, unknown>[];
+    if (payload.name) {
+      orList.push({ name: payload.name });
+    }
+    if (payload.gstNumber) {
+      orList.push({ gstNumber: payload.gstNumber });
+    }
+    if (orList.length === 0) {
+      delete duplicateCriteria.$or;
+    }
+
+    const duplicate = await getFirstMatch(CompanyModel, duplicateCriteria, "_id", {});
+    if (duplicate) {
+      return sendError(
+        res,
+        responseMessage.dataAlreadyExist("Company"),
+        null,
+        StatusCode.BAD_REQUEST
+      );
+    }
+
+    const response = await createData(CompanyModel, {
+      ...payload,
+      userId: req.user._id,
+      medicalStoreId,
+      ...(logoPath ? { logo: logoPath } : {}),
+      isDeleted: false,
+      isActive: payload.isActive ?? true,
     });
 
-    return sendCreated(res, "Company created successfully", { company: newCompany });
+    if (!response) return sendNotFound(res, responseMessage.getDataNotFound("Company"));
+    
+    return sendSuccess(res, responseMessage.addDataSuccess("Company"), { company: response });
   } catch (error) {
     console.error("CREATE COMPANY ERROR", error);
     const message = error instanceof Error ? error.message : responseMessage.internalServerError;
@@ -98,34 +89,55 @@ export const getAllCompanies = async (
   req: AuthRequest,
   res: Response
 ) => {
+  reqInfo(req);
   try {
-    const { pageNum, limitNum, skip, searchText } = getPagination(req.query, {
-      page: 1,
-      limit: 10,
-    });
+    const { page, limit, search, startDate, endDate } = req.query as Record<string, string | undefined>;
+    const criteria: Record<string, unknown> = { isDeleted: false };
+    const options: Record<string, unknown> = { lean: true };
 
-    const filter: Record<string, unknown> = getCompanyScopeFilter(req);
+    if (req.user?.role !== ROLE.ADMIN) criteria.medicalStoreId = req.user?.medicalStoreId;
 
-    applySearchFilter(filter, searchText, ["companyName", "name", "gstNumber", "phone", "email", "state"]);
+    if (search) {
+      criteria.$or = [
+        { name: { $regex: search, $options: "si" } },
+        { gstNumber: { $regex: search, $options: "si" } },
+        { phone: { $regex: search, $options: "si" } },
+        { email: { $regex: search, $options: "si" } },
+        { state: { $regex: search, $options: "si" } },
+        { address: { $regex: search, $options: "si" } },
+      ];
+    }
 
-    const [companies, total] = await Promise.all([
-      CompanyModel.find(filter)
-        .populate("userId", "name email role medicalStoreId")
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limitNum)
-        .lean(),
-      countData(CompanyModel, filter),
+    if (startDate && endDate) {
+      criteria.createdAt = { $gte: new Date(startDate), $lte: new Date(endDate) };
+    }
+
+    options.sort = { createdAt: -1 };
+    if (page && limit) {
+      options.skip = (parseInt(page) - 1) * parseInt(limit);
+      options.limit = parseInt(limit);
+    }
+    let populate = [
+      {
+        path: "userId",
+        select: "name email role medicalStoreId",
+      },
+    ];
+    const [company, totalCount] = await Promise.all([
+      findAllWithPopulateWithSorting(CompanyModel, criteria, {}, options, populate),
+      countData(CompanyModel, criteria),
     ]);
 
+    const stateObj = {
+      page: parseInt(page || "") || 1,
+      limit: parseInt(limit || "") || totalCount,
+      page_limit: Math.ceil(totalCount / (parseInt(limit || "") || totalCount)) || 1,
+    };
+
     return sendSuccess(res, "Companies fetched successfully", {
-      companies,
-      pagination: {
-        total,
-        page: pageNum,
-        limit: limitNum,
-        totalPages: Math.ceil(total / limitNum),
-      },
+      company_data: company,
+      totalData: totalCount,
+      state: stateObj,
     });
   } catch (error) {
     console.error("GET COMPANIES ERROR", error);
@@ -134,25 +146,24 @@ export const getAllCompanies = async (
 };
 
 export const getSingleCompany = async (req: AuthRequest, res: Response) => {
+  reqInfo(req);
   try {
     if (!req.user) {
       return sendUnauthorized(res, responseMessage.accessDenied);
     }
 
     const { id } = req.params;
+    const criteria: Record<string, unknown> = { _id: id, isDeleted: false };
+    if (req.user?.role !== ROLE.ADMIN) {
+      criteria.medicalStoreId = req.user?.medicalStoreId;
+    }
 
-    const filter: Record<string, unknown> = {
-      _id: id,
-      ...getCompanyScopeFilter(req),
-    };
-
-    const company = await CompanyModel.findOne(filter).lean();
-
-    if (!company) {
+    const response = await getFirstMatch(CompanyModel, criteria, {}, {});
+    if (!response) {
       return sendNotFound(res, responseMessage.getDataNotFound("Company"));
     }
 
-    return sendSuccess(res, "Company fetched successfully", { company });
+    return sendSuccess(res, "Company fetched successfully", response);
   } catch (error) {
     console.error("GET SINGLE COMPANY ERROR", error);
     return sendError(res, responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR);
@@ -161,83 +172,80 @@ export const getSingleCompany = async (req: AuthRequest, res: Response) => {
 
 // ================= UPDATE =================
 export const updateCompany = async (req: AuthRequest, res: Response) => {
+  reqInfo(req);
   try {
-    const company = await CompanyModel.findById(req.params.id)
-      .select("_id userId medicalStoreId isDeleted")
-      .lean();
+    if (!req.user) {
+      return sendUnauthorized(res, responseMessage.accessDenied);
+    }
 
-    if (!company || company.isDeleted) {
+    const updatePayload: Record<string, unknown> = {};
+    Object.keys(req.body || {}).forEach((key) => {
+      if (req.body[key] !== undefined) {
+        updatePayload[key] = req.body[key];
+      }
+    });
+    const logoPath = getUploadedLogoPath(req);
+
+    delete updatePayload.logo;
+    delete updatePayload.medicalStoreId;
+    if (logoPath) {
+      updatePayload.logo = logoPath;
+    }
+
+    if (updatePayload.companyName !== undefined && updatePayload.name === undefined) {
+      updatePayload.name = updatePayload.companyName;
+    }
+    delete updatePayload.companyName;
+
+    const criteria: Record<string, unknown> = {
+      _id: req.params.id,
+      isDeleted: false,
+    };
+    if (req.user.role !== ROLE.ADMIN) {
+      criteria.medicalStoreId = req.user.medicalStoreId;
+    }
+
+    const response = await updateData(CompanyModel, criteria, updatePayload, {});
+    if (!response) {
       return sendNotFound(res, responseMessage.getDataNotFound("Company"));
     }
 
-    if (!canAccessCompany(company, req)) {
-      return sendError(res, responseMessage.accessDenied, null, StatusCode.FORBIDDEN);
-    }
-
-    delete req.body.logo;
-    delete req.body.medicalStoreId;
-
-    const allowedFields = [
-      "companyName",
-      "name",
-      "gstNumber",
-      "email",
-      "phone",
-      "state",
-      "address",
-    ];
-
-    const updatePayload: Record<string, unknown> = {};
-    allowedFields.forEach((field) => {
-      if (req.body[field] !== undefined) {
-        if (field === "companyName") {
-          updatePayload.name = req.body[field];
-        } else {
-          updatePayload[field] = req.body[field];
-        }
-      }
-    });
-
-    const updatedCompany = await CompanyModel.findByIdAndUpdate(
-      req.params.id,
-      { $set: updatePayload },
-      { new: true }
-    ).lean();
-
-    return sendSuccess(res, responseMessage.updateDataSuccess("Company"), { company: updatedCompany });
+    return sendSuccess(res, responseMessage.updateDataSuccess("Company"), { company: response });
   } catch (error) {
+    console.log(error)
     return sendError(res, responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR);
   }
 };
 
 // ================= DELETE (SOFT DELETE) =================
 export const deleteCompany = async (req: AuthRequest, res: Response) => {
+  reqInfo(req);
   try {
     if (!req.user) {
       return sendUnauthorized(res, responseMessage.accessDenied);
     }
 
     const { id } = req.params;
-    const company = await CompanyModel.findById(id)
-      .select("_id userId medicalStoreId isDeleted")
-      .lean();
-
-    if (!company || company.isDeleted) {
-      return sendNotFound(res, responseMessage.getDataNotFound("Company"));
+    const criteria: Record<string, unknown> = {
+      _id: id,
+      isDeleted: false,
+    };
+    if (req.user.role !== ROLE.ADMIN) {
+      criteria.medicalStoreId = req.user.medicalStoreId;
     }
 
-    if (!canAccessCompany(company, req)) {
-      return sendError(res, responseMessage.accessDenied, null, StatusCode.FORBIDDEN);
-    }
-
-    await updateData(
+    const response = await updateData(
       CompanyModel,
-      { _id: id },
+      criteria,
       { isDeleted: true },
       { new: true }
     );
 
-    return sendSuccess(res, responseMessage.deleteDataSuccess("Company"));
+    if (!response) {
+      return sendNotFound(res, responseMessage.getDataNotFound("Company"));
+    }
+
+    return sendSuccess(res, responseMessage.deleteDataSuccess("Company"), { company: response });
   } catch (error) {
     console.error("DELETE COMPANY ERROR", error);
     return sendError(res, responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR);

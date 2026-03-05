@@ -1,134 +1,65 @@
-import { Model, PipelineStage, PopulateOptions, QueryOptions, UpdateQuery } from "mongoose";
+export const updateData = async (modelName, criteria, dataToSet, options) => {
+    options.new = true;
+    options.lean = true;
+    return modelName.findOneAndUpdate(criteria, dataToSet, options);
+}
 
-type Criteria<T> = Partial<Record<keyof T | string, unknown>>;
-type Projection = Record<string, unknown> | string;
-type PopulateModel = string | PopulateOptions | Array<string | PopulateOptions>;
+export const getData = async (modelName, criteria, projection, options) => {
+    options.lean = true;
+    return modelName.find(criteria, projection, options);
+}
 
-type CollationOptions = { locale: string };
-const DEFAULT_COLLATION: CollationOptions = { locale: "en" };
+export const getDataWithSorting = async (modelName, criteria, projection, options) => {
+    options.lean = true;
+    return modelName.find(criteria, projection, options).collation({locale: "en"});
+}
 
-const withLean = <T>(options?: QueryOptions<T>): QueryOptions<T> => ({
-  ...options,
-  lean: true,
-});
+export const getFirstMatch = async (modelName, criteria, projection, options) => {
+    options.lean = true;
+    return await modelName.findOne(criteria, projection, options);
+}
 
-export const updateData = async <T>(
-  modelName: Model<T>,
-  criteria: Criteria<T>,
-  dataToSet: UpdateQuery<T>,
-  options: QueryOptions<T> = {},
-) => {
-  return modelName.findOneAndUpdate(criteria as any, dataToSet, {
-    ...options,
-    new: true,
-    lean: true,
-  });
-};
+export const findOneAndPopulate = async (modelName, criteria, projection, options, populateModel) => {
+    options.lean = true;
+    return modelName.findOne(criteria, projection, options).populate(populateModel).exec();
+}
 
-export const getData = async <T>(
-  modelName: Model<T>,
-  criteria: Criteria<T>,
-  projection?: Projection,
-  options?: QueryOptions<T>,
-) => {
-  return modelName.find(criteria as any, projection as any, withLean(options));
-};
+export const countData = async (modelName, criteria) => {
+    return modelName.countDocuments(criteria);
+}
 
-export const getDataWithSorting = async <T>(
-  modelName: Model<T>,
-  criteria: Criteria<T>,
-  projection?: Projection,
-  options?: QueryOptions<T>,
-) => {
-  return modelName
-    .find(criteria as any, projection as any, withLean(options))
-    .collation(DEFAULT_COLLATION);
-};
+export const createData = async (modelName, objToSave) => {
+    return new modelName(objToSave).save();
+}
 
-export const getFirstMatch = async <T>(
-  modelName: Model<T>,
-  criteria: Criteria<T>,
-  projection?: Projection,
-  options?: QueryOptions<T>,
-) => {
-  return modelName.findOne(criteria as any, projection as any, withLean(options));
-};
+export const insertMany = async (modelName, objToSave) => {
+    // const users = objToSave.map(user => new User(user));
+    // return modelName.insertMany(users);
+}
 
-export const findOneAndPopulate = async <T>(
-  modelName: Model<T>,
-  criteria: Criteria<T>,
-  projection?: Projection,
-  options?: QueryOptions<T>,
-  populateModel?: PopulateModel,
-) => {
-  return modelName
-    .findOne(criteria as any, projection as any, withLean(options))
-    .populate(populateModel as any)
-    .exec();
-};
+export async function aggregateData(modelName, criteria) {
+    return modelName.aggregate(criteria);
+}
 
-export const countData = async <T>(modelName: Model<T>, criteria: Criteria<T>) => {
-  return modelName.countDocuments(criteria as any);
-};
+export async function aggregateDataWithSorting(modelName, criteria) {
+    return modelName.aggregate(criteria).collation({locale: "en"});
+}
 
-export const createData = async <T>(modelName: Model<T>, objToSave: unknown) => {
-  return modelName.create(objToSave as any);
-};
+export const aggregateAndPopulate = async (modelName, criteria, populateModel) => {
+    const result = await modelName.aggregate(criteria);
+    return modelName.populate(result, populateModel)
+}
 
-export const insertMany = async <T>(modelName: Model<T>, objToSave: unknown[]) => {
-  return modelName.insertMany(objToSave as any);
-};
+export const updateMany = async (modelName, criteria, dataToSet, options) => {
+    return modelName.updateMany(criteria, dataToSet, options);
+}
 
-export const aggregateData = async <T>(modelName: Model<T>, criteria: PipelineStage[]) => {
-  return modelName.aggregate(criteria);
-};
+export const findAllWithPopulate = async (modelName, criteria, projection, options, populateModel) => {
+    options.lean = true;
+    return modelName.find(criteria, projection, options).populate(populateModel);
+}
 
-export const aggregateDataWithSorting = async <T>(
-  modelName: Model<T>,
-  criteria: PipelineStage[],
-) => {
-  return modelName.aggregate(criteria).collation(DEFAULT_COLLATION);
-};
-
-export const aggregateAndPopulate = async <T>(
-  modelName: Model<T>,
-  criteria: PipelineStage[],
-  populateModel: PopulateModel,
-) => {
-  const result = await modelName.aggregate(criteria);
-  return modelName.populate(result, populateModel as any);
-};
-
-export const updateMany = async <T>(
-  modelName: Model<T>,
-  criteria: Criteria<T>,
-  dataToSet: UpdateQuery<T>,
-  options?: Record<string, unknown>,
-) => {
-  return modelName.updateMany(criteria as any, dataToSet, options as any);
-};
-
-export const findAllWithPopulate = async <T>(
-  modelName: Model<T>,
-  criteria: Criteria<T>,
-  projection?: Projection,
-  options?: QueryOptions<T>,
-  populateModel?: PopulateModel,
-) => {
-  return modelName
-    .find(criteria as any, projection as any, withLean(options))
-    .populate(populateModel as any);
-};
-
-export const findAllWithPopulateWithSorting = async <T>(
-  modelName: Model<T>,
-  criteria: Criteria<T>,
-  projection?: Projection,
-  options?: QueryOptions<T>,
-  populateModel?: PopulateModel,
-) => {
-  return modelName
-    .find(criteria as any, projection as any, withLean(options))
-    .collation(DEFAULT_COLLATION)
-    .populate(populateModel as any);
-};
+export const findAllWithPopulateWithSorting = async (modelName, criteria, projection, options, populateModel) => {
+    options.lean = true;
+    return modelName.find(criteria, projection, options).collation({locale: "en"}).populate(populateModel);
+}
