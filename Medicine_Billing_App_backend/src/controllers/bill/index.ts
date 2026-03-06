@@ -2,7 +2,7 @@ import { Response } from "express";
 import { Types } from "mongoose";
 import { BillModel,Product,BillItemModel } from "../../database";
 import { ROLE, StatusCode } from "../../common";
-import {countData,createData,findAllWithPopulateWithSorting,findOneAndPopulate,insertMany,isDataExists,reqInfo,responseMessage,sendError,sendNotFound,sendSuccess,sendUnauthorized,updateData,} from "../../helper";
+import {countData,createData,findAllWithPopulateWithSorting,findOneAndPopulate,getData,getFirstMatch,insertMany,reqInfo,responseMessage,sendError,sendNotFound,sendSuccess,sendUnauthorized,updateData,} from "../../helper";
 import { AuthRequest } from "../../middleware/auth";
 import { CreateBillBody, UpdateBillBody } from "../../types";
 import {buildBillTotalsSummary,buildCreateStockOps,buildQtyMap,buildUpdateStockOps,calculateBillItems,calculateBillTotals,getBillMedicalContext,getCompanyForBilling,getMedicalStoreForBilling,getProductMap,getStockError,getStockErrorForUpdate,getUserForBilling,normalizeStoreGstType,toId,} from "../../services/bill";
@@ -104,21 +104,15 @@ export const createBill = async (req: AuthRequest, res: Response) => {
     );
     if ("error" in totals) return sendError(res, totals.error, null, StatusCode.BAD_REQUEST);
 
-    let billNo = "";
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      const candidate = `BILL-${Date.now()}-${attempt}`;
-      const existingBill = await isDataExists(BillModel, { billNo: candidate });
-      if (!existingBill) {
-        billNo = candidate;
-        break;
-      }
-    }
-    if (!billNo) {
-      return sendError(res, responseMessage.dataAlreadyExist("Bill"), null, StatusCode.BAD_REQUEST);
-    }
-
-    const bill: any = await createData(BillModel, {
-      billNo,
+    const latestSequentialBill: any = await getFirstMatch(
+      BillModel,
+      { billNo: /^BILL-\d+$/ },
+      "billNo",
+      { sort: { createdAt: -1 } }
+    );
+    const latestMatch = String(latestSequentialBill?.billNo || "").match(/^BILL-(\d+)$/);
+    const baseBillNumber = latestMatch ? parseInt(latestMatch[1], 10) + 1 : 1;
+    const billPayload = {
       medicalStoreId: targetMedicalStoreId,
       companyId,
       userId: targetUserId,
@@ -132,7 +126,26 @@ export const createBill = async (req: AuthRequest, res: Response) => {
       totalTax: totals.totalTax,
       discount: totals.discountAmount,
       grandTotal: totals.grandTotal,
-    });
+    };
+
+    let bill: any = null;
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      const candidate = `BILL-${String(baseBillNumber + attempt).padStart(2, "0")}`;
+      try {
+        bill = await createData(BillModel, {
+          billNo: candidate,
+          ...billPayload,
+        });
+        break;
+      } catch (createErr: any) {
+        if (createErr?.code === 11000) continue;
+        throw createErr;
+      }
+    }
+
+    if (!bill) {
+      return sendError(res, responseMessage.dataAlreadyExist("Bill"), null, StatusCode.BAD_REQUEST);
+    }
 
     await insertMany(
       BillItemModel,
@@ -151,7 +164,7 @@ export const createBill = async (req: AuthRequest, res: Response) => {
       undefined,
       BILL_POPULATE_OPTIONS
     );
-    const createdItems = await BillItemModel.find({ billId: bill._id }).lean();
+    const createdItems = await getData(BillItemModel, { billId: bill._id }, {}, {});
 
     return sendSuccess(res, responseMessage.invoiceCreated, {
       bill: populatedBill,
