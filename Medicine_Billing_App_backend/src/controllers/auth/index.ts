@@ -7,6 +7,7 @@ import {
   email_verification_mail,
   generateToken,
   getFirstMatch,
+  isDataExists,
   reqInfo,
   responseMessage,
   sendCreated,
@@ -57,7 +58,7 @@ export const adminCreateUser = async (req: AuthRequest, res: Response) => {
 
     const normalizedEmail = email.toLowerCase().trim();
 
-    const existingUser = await getFirstMatch(User, { email: normalizedEmail }, "", {});
+    const existingUser = await isDataExists(User, { email: normalizedEmail });
     if (existingUser) {
       return sendError(
         res,

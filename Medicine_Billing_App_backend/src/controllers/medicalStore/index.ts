@@ -2,7 +2,7 @@ import { Response } from "express";
 import User from "../../database/models/auth";
 import { MedicalStoreModel } from "../../database/models";
 import { ROLE, StatusCode } from "../../common";
-import {countData,createData,findAllWithPopulateWithSorting,getFirstMatch,reqInfo,responseMessage,sendCreated,sendError,sendNotFound,sendSuccess,sendUnauthorized,updateData,} from "../../helper";
+import {countData,createData,findAllWithPopulateWithSorting,getFirstMatch,isDataExists,reqInfo,responseMessage,sendCreated,sendError,sendNotFound,sendSuccess,sendUnauthorized,updateData,} from "../../helper";
 import { AuthRequest } from "../../middleware";
 
 export const createMedicalStore = async (req: AuthRequest, res: Response) => {
@@ -11,21 +11,24 @@ export const createMedicalStore = async (req: AuthRequest, res: Response) => {
     if (!req.user) return sendUnauthorized(res, responseMessage.accessDenied);
 
     const payload = req.body as Record<string, unknown>;
+    const normalizedName =
+      typeof payload.name === "string" ? payload.name.trim() : "";
+    const normalizedGstNumber =
+      typeof payload.gstNumber === "string"
+        ? payload.gstNumber.trim().toUpperCase()
+        : "";
 
-    const duplicate = await getFirstMatch(
-      MedicalStoreModel,
-      {
-        name: payload.name,
-        gstNumber: payload.gstNumber,
-      },
-      "_id",
-      {}
-    );
+    const duplicate = await isDataExists(MedicalStoreModel, {
+      name: normalizedName,
+      isDeleted: false,
+    });
 
     if (duplicate) return sendError(res,responseMessage.dataAlreadyExist("Medical Store"),null,StatusCode.BAD_REQUEST);
     
     const medicalStore = await createData(MedicalStoreModel, {
       ...payload,
+      name: normalizedName,
+      gstNumber: normalizedGstNumber,
       createdBy: req.user._id,
       isActive: payload.isActive ?? true,
     });

@@ -2,7 +2,7 @@ import { Response } from "express";
 import { Product } from "../../database/models/product";
 import { CompanyModel } from "../../database/models/company";
 import { ROLE, StatusCode } from "../../common";
-import {countData,createData,findAllWithPopulateWithSorting,findOneAndPopulate,getFirstMatch,reqInfo,responseMessage,sendError,sendNotFound,sendSuccess,sendUnauthorized,updateData} from "../../helper";
+import {countData,createData,findAllWithPopulateWithSorting,findOneAndPopulate,getFirstMatch,isDataExists,reqInfo,responseMessage,sendError,sendNotFound,sendSuccess,sendUnauthorized,updateData} from "../../helper";
 import { AuthRequest } from "../../middleware/auth";
 
 const getProductScopeFilter = (req: AuthRequest) => {
@@ -25,7 +25,12 @@ export const createProduct = async (req: AuthRequest, res: Response) => {
     const payload = req.body as Record<string, unknown>;
     const companyId = payload.companyId;
     const medicalStoreId = req.user.medicalStoreId;
-
+    const normalizedName = typeof payload.name === "string" ? payload.name.trim() : "";
+    const normalizedCategory =
+      typeof payload.category === "string" ? payload.category.trim() : "";
+    const normalizedProductType =
+      typeof payload.productType === "string" ? payload.productType.trim() : "";
+    
     if (!medicalStoreId) return sendError(res, responseMessage.medicalIdNotAssigned, null, StatusCode.BAD_REQUEST);
 
     const company = await CompanyModel.findOne({
@@ -45,8 +50,26 @@ export const createProduct = async (req: AuthRequest, res: Response) => {
       );
     }
 
+    const duplicateProduct = await isDataExists(Product, {
+      isDeleted: false,
+      medicalStoreId,
+      name: normalizedName,
+    });
+
+    if (duplicateProduct) {
+      return sendError(
+        res,
+        responseMessage.dataAlreadyExist("Product"),
+        null,
+        StatusCode.BAD_REQUEST
+      );
+    }
+
     const product = await createData(Product, {
       ...payload,
+      name: normalizedName,
+      category: normalizedCategory,
+      productType: normalizedProductType,
       companyId,
       medicalStoreId,
       createdBy: req.user._id,

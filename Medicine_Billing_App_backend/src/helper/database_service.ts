@@ -19,6 +19,11 @@ export const getFirstMatch = async (modelName, criteria, projection, options) =>
     return await modelName.findOne(criteria, projection, options);
 }
 
+export const isDataExists = async (modelName, criteria) => {
+    const existing = await modelName.findOne(criteria).select("_id").lean();
+    return Boolean(existing);
+}
+
 export const findOneAndPopulate = async (modelName, criteria, projection, options, populateModel) => {
     options.lean = true;
     return modelName.findOne(criteria, projection, options).populate(populateModel).exec();

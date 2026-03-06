@@ -1,7 +1,7 @@
 import { Response } from "express";
 import { CategoryModel } from "../../database/models/category";
 import { ROLE, StatusCode } from "../../common";
-import {countData,createData,findAllWithPopulateWithSorting,findOneAndPopulate,getFirstMatch,reqInfo,responseMessage,sendError,sendNotFound,sendSuccess,sendUnauthorized,updateData,} from "../../helper";
+import {countData,createData,findAllWithPopulateWithSorting,findOneAndPopulate,getFirstMatch,isDataExists,reqInfo,responseMessage,sendError,sendNotFound,sendSuccess,sendUnauthorized,updateData,} from "../../helper";
 import { AuthRequest } from "../../middleware/auth";
 
 const getCategoryScopeFilter = (req: AuthRequest) => {
@@ -26,12 +26,11 @@ export const createCategory = async (req: AuthRequest, res: Response) => {
     const normalizedName = String(name).trim().toLowerCase();
     const normalizedDescription = typeof description === "string" ? description.trim() : "";
 
-    const existing = await getFirstMatch(
-      CategoryModel,
-      { name: normalizedName, isDeleted: false, medicalStoreId },
-      "_id",
-      {}
-    );
+    const existing = await isDataExists(CategoryModel, {
+      name: normalizedName,
+      isDeleted: false,
+      medicalStoreId,
+    });
     if (existing) {
       return sendError(res, responseMessage.categoryAlreadyExists, null, StatusCode.BAD_REQUEST);
     }

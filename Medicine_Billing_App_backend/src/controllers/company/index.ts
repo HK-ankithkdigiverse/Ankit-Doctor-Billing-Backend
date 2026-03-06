@@ -1,7 +1,7 @@
 ﻿import { Response } from "express";
 import { CompanyModel } from "../../database";
 import { ROLE, StatusCode } from "../../common";
-import { countData, createData, findAllWithPopulateWithSorting, getFirstMatch, reqInfo, responseMessage, sendError, sendNotFound, sendSuccess, sendUnauthorized, updateData } from "../../helper";
+import { countData, createData, findAllWithPopulateWithSorting, getFirstMatch, isDataExists, reqInfo, responseMessage, sendError, sendNotFound, sendSuccess, sendUnauthorized, updateData } from "../../helper";
 import { AuthRequest } from "../../middleware";
 
 const getUploadedLogoPath = (req: AuthRequest) => {
@@ -26,6 +26,15 @@ export const createCompany = async (
 
     const payload = req.body as Record<string, unknown>;
     const logoPath = getUploadedLogoPath(req);
+    const rawName =
+      typeof payload.name === "string"
+        ? payload.name
+        : typeof payload.companyName === "string"
+          ? payload.companyName
+          : "";
+    const normalizedName = rawName.trim();
+    const normalizedGstNumber =
+      typeof payload.gstNumber === "string" ? payload.gstNumber.trim().toUpperCase() : "";
     const medicalStoreId =
       req.user.role === ROLE.ADMIN
         ? payload.medicalStoreId || req.user.medicalStoreId
@@ -40,23 +49,18 @@ export const createCompany = async (
       );
     }
 
-    const duplicateCriteria: Record<string, unknown> = {
-      medicalStoreId,
-      isDeleted: false,
-      $or: [],
-    };
-    const orList = duplicateCriteria.$or as Record<string, unknown>[];
-    if (payload.name) {
-      orList.push({ name: payload.name });
+    if (!normalizedName) {
+      return sendError(res, responseMessage.validationError("name"), null, StatusCode.BAD_REQUEST);
     }
-    if (payload.gstNumber) {
-      orList.push({ gstNumber: payload.gstNumber });
-    }
-    if (orList.length === 0) {
-      delete duplicateCriteria.$or;
+    if (!normalizedGstNumber) {
+      return sendError(res, responseMessage.validationError("gstNumber"), null, StatusCode.BAD_REQUEST);
     }
 
-    const duplicate = await getFirstMatch(CompanyModel, duplicateCriteria, "_id", {});
+    const duplicate = await isDataExists(CompanyModel, {
+      medicalStoreId,
+      isDeleted: false,
+      name: normalizedName,
+    });
     if (duplicate) {
       return sendError(
         res,
@@ -66,8 +70,15 @@ export const createCompany = async (
       );
     }
 
-    const response = await createData(CompanyModel, {
+    const companyPayload: Record<string, unknown> = {
       ...payload,
+      name: normalizedName,
+      gstNumber: normalizedGstNumber,
+    };
+    delete companyPayload.companyName;
+
+    const response = await createData(CompanyModel, {
+      ...companyPayload,
       userId: req.user._id,
       medicalStoreId,
       ...(logoPath ? { logo: logoPath } : {}),

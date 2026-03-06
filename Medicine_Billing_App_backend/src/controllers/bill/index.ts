@@ -2,7 +2,7 @@ import { Response } from "express";
 import { Types } from "mongoose";
 import { BillModel,Product,BillItemModel } from "../../database";
 import { ROLE, StatusCode } from "../../common";
-import {countData,createData,findAllWithPopulateWithSorting,findOneAndPopulate,insertMany,reqInfo,responseMessage,sendError,sendNotFound,sendSuccess,sendUnauthorized,updateData,} from "../../helper";
+import {countData,createData,findAllWithPopulateWithSorting,findOneAndPopulate,insertMany,isDataExists,reqInfo,responseMessage,sendError,sendNotFound,sendSuccess,sendUnauthorized,updateData,} from "../../helper";
 import { AuthRequest } from "../../middleware/auth";
 import { CreateBillBody, UpdateBillBody } from "../../types";
 import {buildBillTotalsSummary,buildCreateStockOps,buildQtyMap,buildUpdateStockOps,calculateBillItems,calculateBillTotals,getBillMedicalContext,getCompanyForBilling,getMedicalStoreForBilling,getProductMap,getStockError,getStockErrorForUpdate,getUserForBilling,normalizeStoreGstType,toId,} from "../../services/bill";
@@ -104,8 +104,21 @@ export const createBill = async (req: AuthRequest, res: Response) => {
     );
     if ("error" in totals) return sendError(res, totals.error, null, StatusCode.BAD_REQUEST);
 
+    let billNo = "";
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const candidate = `BILL-${Date.now()}-${attempt}`;
+      const existingBill = await isDataExists(BillModel, { billNo: candidate });
+      if (!existingBill) {
+        billNo = candidate;
+        break;
+      }
+    }
+    if (!billNo) {
+      return sendError(res, responseMessage.dataAlreadyExist("Bill"), null, StatusCode.BAD_REQUEST);
+    }
+
     const bill: any = await createData(BillModel, {
-      billNo: `BILL-${Date.now()}`,
+      billNo,
       medicalStoreId: targetMedicalStoreId,
       companyId,
       userId: targetUserId,
