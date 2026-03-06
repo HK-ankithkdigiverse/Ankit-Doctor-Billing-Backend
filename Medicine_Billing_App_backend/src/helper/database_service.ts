@@ -25,8 +25,9 @@ export const isDataExists = async (modelName, criteria) => {
 }
 
 export const findOneAndPopulate = async (modelName, criteria, projection, options, populateModel) => {
-    options.lean = true;
-    return modelName.findOne(criteria, projection, options).populate(populateModel).exec();
+    const safeOptions = options || {};
+    safeOptions.lean = true;
+    return modelName.findOne(criteria, projection, safeOptions).populate(populateModel).exec();
 }
 
 export const countData = async (modelName, criteria) => {

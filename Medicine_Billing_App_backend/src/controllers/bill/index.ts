@@ -218,32 +218,65 @@ export const getBillById = async (req: AuthRequest, res: Response) => {
   reqInfo(req);
   try {
     if (!req.user) return sendUnauthorized(res, responseMessage.accessDenied);
-    
-    const criteria: any = {
-      _id: req.params.id,
+
+    const billId = String(req.params.id || "").trim();
+    if (!Types.ObjectId.isValid(billId)) {
+      return sendError(
+        res,
+        responseMessage.validationError("bill id"),
+        null,
+        StatusCode.BAD_REQUEST
+      );
+    }
+
+    const criteria: Record<string, unknown> = {
+      _id: billId,
       isDeleted: false,
     };
 
-    if (req.user.role !== ROLE.ADMIN) criteria.medicalStoreId = req.user.medicalStoreId;
-  
-    const response: any = await findOneAndPopulate(
+    if (req.user.role !== ROLE.ADMIN) {
+      if (!req.user.medicalStoreId) {
+        return sendError(
+          res,
+          responseMessage.medicalIdNotAssigned,
+          null,
+          StatusCode.FORBIDDEN
+        );
+      }
+      criteria.medicalStoreId = req.user.medicalStoreId;
+    }
+
+    const billData: any = await findOneAndPopulate(
       BillModel,
       criteria,
       undefined,
-      undefined,
+      {},
       BILL_POPULATE_OPTIONS
     );
 
-    if (!response) return sendNotFound(res, responseMessage.invoiceNotFound);
-    const items = await BillItemModel.find({ billId: response._id }).lean();
+    if (!billData) return sendNotFound(res, responseMessage.invoiceNotFound);
+    const items = await BillItemModel.find({ billId: billData._id }).lean();
 
     return sendSuccess(res, "Bill fetched successfully", {
-      bill: response,
+      bill: billData,
       items,
-      totals: buildBillTotalsSummary(response),
+      totals: buildBillTotalsSummary(billData),
     });
-  } catch {
-    return sendError(res, responseMessage.internalServerError, null, StatusCode.INTERNAL_ERROR);
+  } catch (err: any) {
+    console.error("GET BILL BY ID ERROR", {
+      billId: req.params?.id,
+      userId: req.user?._id,
+      role: req.user?.role,
+      medicalStoreId: req.user?.medicalStoreId,
+      message: err?.message,
+      stack: err?.stack,
+    });
+    return sendError(
+      res,
+      err?.message || responseMessage.internalServerError,
+      err,
+      StatusCode.INTERNAL_ERROR
+    );
   }
 };
 
