@@ -10,6 +10,7 @@ export interface IMedicalStore extends Document {
   pincode: string;
   gstNumber: string;
   gstType: GST_TYPE;
+  gstPercent: number;
   panCardNumber: string;
   isActive: boolean;
   isDeleted: boolean;
@@ -58,6 +59,13 @@ const medicalStoreSchema = new mongoose.Schema<IMedicalStore>(
       type: String,
       enum: Object.values(GST_TYPE),
       default: GST_TYPE.CGST_SGST,
+      required: true,
+    },
+    gstPercent: {
+      type: Number,
+      min: 0,
+      max: 100,
+      default: 0,
       required: true,
     },
     panCardNumber: {

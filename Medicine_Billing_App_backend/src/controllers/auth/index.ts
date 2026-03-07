@@ -38,6 +38,7 @@ const USER_STORE_POPULATE_FIELDS = [
   "pincode",
   "gstNumber",
   "gstType",
+  "gstPercent",
   "panCardNumber",
   "isActive",
 ].join(" ");

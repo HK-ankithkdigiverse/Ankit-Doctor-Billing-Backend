@@ -16,6 +16,7 @@ const gstTypeSchema = Joi.string()
   .trim()
   .uppercase()
   .valid(GST_TYPE.IGST, GST_TYPE.CGST_SGST, "CGST & SGST");
+const gstPercentSchema = Joi.number().min(0).max(100);
 
 export const createMedicalStoreSchema = Joi.object({
   name: longNameSchema.required(),
@@ -26,6 +27,7 @@ export const createMedicalStoreSchema = Joi.object({
   pincode: pincodeSchema.required(),
   gstNumber: gstNumberSchema.required(),
   gstType: gstTypeSchema.required(),
+  gstPercent: gstPercentSchema.required(),
   panCardNumber: panCardSchema.required(),
   isActive: Joi.boolean().optional(),
 });
@@ -39,6 +41,7 @@ export const updateMedicalStoreSchema = Joi.object({
   pincode: pincodeSchema.optional(),
   gstNumber: gstNumberSchema.optional(),
   gstType: gstTypeSchema.optional(),
+  gstPercent: gstPercentSchema.optional(),
   panCardNumber: panCardSchema.optional(),
   isActive: Joi.boolean().optional(),
 }).min(1);

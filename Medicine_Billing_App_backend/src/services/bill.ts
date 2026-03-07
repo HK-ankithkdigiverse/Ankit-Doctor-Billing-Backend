@@ -85,8 +85,8 @@ export const getMedicalStoreForBilling = async (medicalStoreId: string) =>
     _id: medicalStoreId,
     isDeleted: false,
   })
-    .select("_id gstType")
-    .lean<{ _id: Types.ObjectId; gstType?: string } | null>();
+    .select("_id gstType gstPercent")
+    .lean<{ _id: Types.ObjectId; gstType?: string; gstPercent?: number } | null>();
 
 export const getCompanyForBilling = async (companyId: string, medicalStoreId: string) =>
   CompanyModel.findOne({

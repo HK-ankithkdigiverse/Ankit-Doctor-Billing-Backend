@@ -23,6 +23,7 @@ const BILL_STORE_POPULATE_FIELDS = [
   "pincode",
   "gstNumber",
   "gstType",
+  "gstPercent",
   "panCardNumber",
   "isActive",
 ].join(" ");
@@ -49,7 +50,7 @@ export const createBill = async (req: AuthRequest, res: Response) => {
     if (isAdmin && !payloadUserId) return sendError(res, responseMessage.validationError("user"), null, StatusCode.BAD_REQUEST);
     
 
-    const { companyId, items, discount = 0, gstPercent = 0 } = body;
+    const { companyId, items, discount = 0 } = body;
     const targetUserId = String(payloadUserId);
     const targetUser = await getUserForBilling(targetUserId);
 
@@ -72,6 +73,7 @@ export const createBill = async (req: AuthRequest, res: Response) => {
       );
     }
     const gstType = normalizeStoreGstType(medicalStore.gstType);
+    const storeGstPercent = Number(medicalStore.gstPercent ?? 0);
 
     const companyForBilling = await getCompanyForBilling(companyId, targetMedicalStoreId);
     if (!companyForBilling) {
@@ -98,7 +100,7 @@ export const createBill = async (req: AuthRequest, res: Response) => {
     const totals = calculateBillTotals(
       subTotal,
       discount,
-      gstPercent,
+      storeGstPercent,
       gstType,
       responseMessage.discountCannotExceedBillAmount
     );
@@ -333,7 +335,6 @@ export const updateBill = async (req: AuthRequest, res: Response) => {
       companyId,
       items,
       discount,
-      gstPercent,
       userId: payloadUserId,
     } = req.body as UpdateBillBody;
 
@@ -366,6 +367,7 @@ export const updateBill = async (req: AuthRequest, res: Response) => {
       );
     }
     const billGstType = normalizeStoreGstType(medicalStore.gstType);
+    const storeGstPercent = Number(medicalStore.gstPercent ?? 0);
     bill.gstType = billGstType;
 
     if (companyId) {
@@ -420,7 +422,7 @@ export const updateBill = async (req: AuthRequest, res: Response) => {
     const totals = calculateBillTotals(
       Number(bill.subTotal || 0),
       Number(discount ?? bill.discount ?? 0),
-      Number(gstPercent ?? bill.gstPercent ?? 0),
+      storeGstPercent,
       billGstType,
       responseMessage.discountCannotExceedBillAmount
     );
