@@ -9,40 +9,8 @@ import { reqInfo } from "./helper";
 
 const app = express();
 
-const parseCsv = (value?: string): string[] =>
-  (value ?? "")
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
 
-const allowedOrigins = parseCsv(process.env.CORS_ALLOWED_ORIGINS);
-const allowedMethods = parseCsv(process.env.CORS_ALLOWED_METHODS);
-const allowedHeaders = parseCsv(process.env.CORS_ALLOWED_HEADERS);
-const exposedHeaders = parseCsv(process.env.CORS_EXPOSED_HEADERS);
-const configuredMaxAge = Number(process.env.CORS_MAX_AGE);
-const maxAge = Number.isFinite(configuredMaxAge) && configuredMaxAge >= 0 ? configuredMaxAge : 3600;
-
-const corsOptions: CorsOptions = {
-  origin: (origin, callback) => {
-    if (!origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-
-    return callback(new Error("Origin not allowed by CORS"));
-  },
-  methods: allowedMethods.length > 0
-    ? allowedMethods
-    : ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: allowedHeaders.length > 0
-    ? allowedHeaders
-    : ["Content-Type", "Authorization"],
-  exposedHeaders: exposedHeaders.length > 0 ? exposedHeaders : undefined,
-  credentials: process.env.CORS_ALLOW_CREDENTIALS === "true",
-  maxAge,
-  optionsSuccessStatus: 204,
-};
-
-app.use(cors(corsOptions));
+app.use(cors());
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
