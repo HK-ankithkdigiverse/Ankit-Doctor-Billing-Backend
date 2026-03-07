@@ -1,15 +1,41 @@
 ﻿import { Response } from "express";
+import path from "path";
 import { CompanyModel } from "../../database";
 import { ROLE, StatusCode } from "../../common";
 import { countData, createData, findAllWithPopulateWithSorting, getFirstMatch, isDataExists, reqInfo, responseMessage, sendError, sendNotFound, sendSuccess, sendUnauthorized, updateData } from "../../helper";
 import { AuthRequest } from "../../middleware";
 
-const getUploadedLogoPath = (req: AuthRequest) => {
-  const files = (req as AuthRequest & { files?: Express.Multer.File[] }).files;
-  if (Array.isArray(files) && files.length > 0) {
-    return `uploads/${files[0].filename}`;
+const normalizeLogoPath = (logo: unknown): string | undefined => {
+  if (logo === undefined) {
+    return undefined;
   }
-  return undefined;
+  if (typeof logo !== "string") {
+    return undefined;
+  }
+
+  const trimmedLogo = logo.trim();
+  if (!trimmedLogo) {
+    return "";
+  }
+
+  const cleanLogo = trimmedLogo.split("?")[0].split("#")[0];
+  if (!cleanLogo) {
+    return "";
+  }
+  if (cleanLogo.startsWith("uploads/")) {
+    return cleanLogo;
+  }
+  if (cleanLogo.startsWith("/uploads/")) {
+    return cleanLogo.slice(1);
+  }
+
+  const uploadsMarker = "/uploads/";
+  const uploadsMarkerIndex = cleanLogo.lastIndexOf(uploadsMarker);
+  if (uploadsMarkerIndex >= 0) {
+    return cleanLogo.slice(uploadsMarkerIndex + 1);
+  }
+
+  return `uploads/${path.basename(cleanLogo)}`;
 };
 
 
@@ -25,7 +51,11 @@ export const createCompany = async (
     }
 
     const payload = req.body as Record<string, unknown>;
-    const logoPath = getUploadedLogoPath(req);
+    const hasLogoInPayload = Object.prototype.hasOwnProperty.call(req.body || {}, "logo");
+    const logoPath = normalizeLogoPath(req.body?.logo);
+    if (hasLogoInPayload && logoPath === undefined) {
+      return sendError(res, responseMessage.validationError("logo"), null, StatusCode.BAD_REQUEST);
+    }
     const rawName =
       typeof payload.name === "string"
         ? payload.name
@@ -76,12 +106,14 @@ export const createCompany = async (
       gstNumber: normalizedGstNumber,
     };
     delete companyPayload.companyName;
-
+    delete companyPayload.logo;
+    if (logoPath) {
+      companyPayload.logo = logoPath;
+    }
     const response = await createData(CompanyModel, {
       ...companyPayload,
       userId: req.user._id,
       medicalStoreId,
-      ...(logoPath ? { logo: logoPath } : {}),
       isDeleted: false,
       isActive: payload.isActive ?? true,
     });
@@ -195,12 +227,17 @@ export const updateCompany = async (req: AuthRequest, res: Response) => {
         updatePayload[key] = req.body[key];
       }
     });
-    const logoPath = getUploadedLogoPath(req);
+    const hasLogoInPayload = Object.prototype.hasOwnProperty.call(req.body || {}, "logo");
+    const logoPath = normalizeLogoPath(req.body?.logo);
+    if (hasLogoInPayload && logoPath === undefined) {
+      return sendError(res, responseMessage.validationError("logo"), null, StatusCode.BAD_REQUEST);
+    }
 
-    delete updatePayload.logo;
     delete updatePayload.medicalStoreId;
-    if (logoPath) {
-      updatePayload.logo = logoPath;
+    if (hasLogoInPayload) {
+      updatePayload.logo = logoPath || "";
+    } else {
+      delete updatePayload.logo;
     }
 
     if (updatePayload.companyName !== undefined && updatePayload.name === undefined) {
@@ -262,3 +299,4 @@ export const deleteCompany = async (req: AuthRequest, res: Response) => {
     return sendError(res, responseMessage.internalServerError, error, StatusCode.INTERNAL_ERROR);
   }
 };
+

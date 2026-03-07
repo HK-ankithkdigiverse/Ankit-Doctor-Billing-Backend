@@ -16,6 +16,7 @@ export const createCompanySchema = Joi.object({
   phone: phoneSchema.allow("").optional(),
   state: Joi.string().trim().max(80).allow("").optional(),
   address: addressSchema.allow("").optional(),
+  logo: Joi.string().trim().allow("").optional(),
 }).or("name", "companyName");
 
 export const updateCompanySchema = Joi.object({
@@ -26,6 +27,7 @@ export const updateCompanySchema = Joi.object({
   phone: phoneSchema.allow("").optional(),
   state: Joi.string().trim().max(80).allow("").optional(),
   address: addressSchema.allow("").optional(),
+  logo: Joi.string().trim().allow("").optional(),
 }).min(1);
 
 export const companyIdParamSchema = Joi.object({
