@@ -30,7 +30,6 @@ router.get("/", authMiddleware, allowRoles("ADMIN"), getMedicalStores);
 router.get(
   "/:id",
   authMiddleware,
-  allowRoles("ADMIN"),
   validate(medicalStoreIdParamSchema, "params"),
   getMedicalStoreById
 );
