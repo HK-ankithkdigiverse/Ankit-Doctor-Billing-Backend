@@ -1,6 +1,6 @@
 import "dotenv/config";
 import express, { NextFunction, Request, Response } from 'express';
-import cors from 'cors';
+import cors, { CorsOptions } from 'cors';
 import apiRoutes from "./routes";
 import cookieParser from "cookie-parser";
 import { sharedUploadDir } from "./common/uploadPath";
@@ -9,18 +9,55 @@ import { reqInfo } from "./helper";
 
 const app = express();
 
-app.use(cors());
+const parseCsv = (value?: string): string[] =>
+  (value ?? "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+const allowedOrigins = parseCsv(process.env.CORS_ALLOWED_ORIGINS);
+const allowedMethods = parseCsv(process.env.CORS_ALLOWED_METHODS);
+const allowedHeaders = parseCsv(process.env.CORS_ALLOWED_HEADERS);
+const exposedHeaders = parseCsv(process.env.CORS_EXPOSED_HEADERS);
+const configuredMaxAge = Number(process.env.CORS_MAX_AGE);
+const maxAge = Number.isFinite(configuredMaxAge) && configuredMaxAge >= 0 ? configuredMaxAge : 3600;
+
+const corsOptions: CorsOptions = {
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    return callback(new Error("Origin not allowed by CORS"));
+  },
+  methods: allowedMethods.length > 0
+    ? allowedMethods
+    : ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: allowedHeaders.length > 0
+    ? allowedHeaders
+    : ["Content-Type", "Authorization"],
+  exposedHeaders: exposedHeaders.length > 0 ? exposedHeaders : undefined,
+  credentials: process.env.CORS_ALLOW_CREDENTIALS === "true",
+  maxAge,
+  optionsSuccessStatus: 204,
+};
+
+app.use(cors(corsOptions));
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use((req, res, next) => {
-  res.setHeader("Cache-Control", "no-store");
+  if (req.method !== "OPTIONS") {
+    res.setHeader("Cache-Control", "no-store");
+  }
   next();
 });
 
 app.use((req, _res, next) => {
-  void reqInfo(req);
+  if (req.method !== "OPTIONS") {
+    void reqInfo(req);
+  }
   next();
 });
 
