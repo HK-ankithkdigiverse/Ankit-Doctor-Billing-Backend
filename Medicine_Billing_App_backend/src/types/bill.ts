@@ -23,6 +23,7 @@ export interface CreateBillBody {
   companyId: string;
   items: BillInputItem[];
   discount?: number;
+  discountPercent?: never;
   userId?: string;
 }
 
@@ -31,5 +32,6 @@ export interface UpdateBillBody {
   items?: BillInputItem[];
   gstPercent?: number;
   discount?: number;
+  discountPercent?: never;
   userId?: string;
 }

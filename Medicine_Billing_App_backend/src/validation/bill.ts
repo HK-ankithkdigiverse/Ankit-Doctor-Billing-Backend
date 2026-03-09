@@ -19,6 +19,7 @@ export const createBillSchema = Joi.object({
   companyId: objectIdSchema.required(),
   gstPercent: Joi.number().min(0).optional(),
   discount: Joi.number().min(0).optional(),
+  discountPercent: Joi.forbidden(),
 
   items: Joi.array()
     .items(billItemSchema)
@@ -34,6 +35,7 @@ export const updateBillSchema = Joi.object({
   companyId: objectIdSchema.optional(),
   gstPercent: Joi.number().min(0).optional(),
   discount: Joi.number().min(0).optional(),
+  discountPercent: Joi.forbidden(),
   items: Joi.array().items(billItemSchema).min(1).optional(),
 }).min(1);
 
