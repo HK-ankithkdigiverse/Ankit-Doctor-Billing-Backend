@@ -211,6 +211,7 @@ export const calculateBillTotals = (
   message: string
 ): BillTotals | { error: string } => {
   const normalizedSubTotal = roundCurrency(Number(subTotal || 0));
+  // Discount is a fixed amount applied once on whole bill subtotal.
   const discountAmount = roundCurrency(Number(discount || 0));
   const normalizedGstPercent = Number(gstPercent || 0);
 
