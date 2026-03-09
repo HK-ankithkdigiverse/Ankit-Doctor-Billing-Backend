@@ -45,11 +45,3 @@
 
 ## Dashboard
 - GET /api/dashboard
-  - Optional query params:
-    - `search` (bill no search)
-    - `companyId`
-    - `medicalStoreId` (admin only for selected store filtering)
-    - `startDate` (ISO date)
-    - `endDate` (ISO date)
-    - `page` (default 1)
-    - `limit` (default 10)
