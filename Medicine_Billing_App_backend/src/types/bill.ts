@@ -22,7 +22,6 @@ export interface BillLineItem {
 export interface CreateBillBody {
   companyId: string;
   items: BillInputItem[];
-  gstPercent?: number;
   discount?: number;
   userId?: string;
 }

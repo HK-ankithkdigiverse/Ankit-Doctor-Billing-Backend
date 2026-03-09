@@ -26,7 +26,6 @@ const billSchema = new mongoose.Schema(
       default: GST_TYPE.CGST_SGST,
       required: true,
     },
-    gstPercent: { type: Number, default: 0 },
     subTotal: { type: Number, required: true },
     taxableAmount: { type: Number, required: true },
     cgst: { type: Number, default: 0 },
