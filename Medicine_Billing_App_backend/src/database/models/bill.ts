@@ -3,7 +3,7 @@ import { GST_TYPE, MODEL } from "../../common";
 
 const billSchema = new mongoose.Schema(
   {
-    billNo: { type: String, required: true, unique: true },
+    billNo: { type: String, required: true },
     medicalStoreId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: MODEL.MEDICAL_STORE,
@@ -40,4 +40,11 @@ const billSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+billSchema.index({ medicalStoreId: 1, billNo: 1 }, { unique: true });
+billSchema.index({ medicalStoreId: 1, createdAt: -1 });
+
 export const BillModel = mongoose.model(MODEL.BILL, billSchema);
+
+export const ensureBillCollectionIndexes = async () => {
+  await BillModel.syncIndexes();
+};

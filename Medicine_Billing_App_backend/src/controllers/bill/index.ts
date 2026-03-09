@@ -2,10 +2,10 @@ import { Response } from "express";
 import { Types } from "mongoose";
 import { BillModel,Product,BillItemModel } from "../../database";
 import { ROLE, StatusCode } from "../../common";
-import {countData,createData,findAllWithPopulateWithSorting,findOneAndPopulate,getData,getFirstMatch,insertMany,reqInfo,responseMessage,sendError,sendNotFound,sendSuccess,sendUnauthorized,updateData,} from "../../helper";
+import {countData,createData,findAllWithPopulateWithSorting,findOneAndPopulate,getData,insertMany,reqInfo,responseMessage,sendError,sendNotFound,sendSuccess,sendUnauthorized,updateData,} from "../../helper";
 import { AuthRequest } from "../../middleware/auth";
 import { CreateBillBody, UpdateBillBody } from "../../types";
-import {buildBillTotalsSummary,buildCreateStockOps,buildQtyMap,buildUpdateStockOps,calculateBillItems,calculateBillTotals,getBillMedicalContext,getCompanyForBilling,getMedicalStoreForBilling,getProductMap,getStockError,getStockErrorForUpdate,getUserForBilling,normalizeStoreGstType,toId,} from "../../services/bill";
+import {buildBillTotalsSummary,buildCreateStockOps,buildQtyMap,buildUpdateStockOps,calculateBillItems,calculateBillTotals,getBillMedicalContext,getCompanyForBilling,getMedicalStoreForBilling,getNextBillNumberForStore,getProductMap,getStockError,getStockErrorForUpdate,getUserForBilling,normalizeStoreGstType,toId,} from "../../services/bill";
 
 const BILL_USER_POPULATE_FIELDS = [
   "name",
@@ -106,14 +106,7 @@ export const createBill = async (req: AuthRequest, res: Response) => {
     );
     if ("error" in totals) return sendError(res, totals.error, null, StatusCode.BAD_REQUEST);
 
-    const latestSequentialBill: any = await getFirstMatch(
-      BillModel,
-      { billNo: /^BILL-\d+$/ },
-      "billNo",
-      { sort: { createdAt: -1 } }
-    );
-    const latestMatch = String(latestSequentialBill?.billNo || "").match(/^BILL-(\d+)$/);
-    const baseBillNumber = latestMatch ? parseInt(latestMatch[1], 10) + 1 : 1;
+    const baseBillNumber = await getNextBillNumberForStore(targetMedicalStoreId);
     const billPayload = {
       medicalStoreId: targetMedicalStoreId,
       companyId,
@@ -132,7 +125,7 @@ export const createBill = async (req: AuthRequest, res: Response) => {
 
     let bill: any = null;
     for (let attempt = 0; attempt < 50; attempt += 1) {
-      const candidate = `BILL-${String(baseBillNumber + attempt).padStart(2, "0")}`;
+      const candidate = String(baseBillNumber + attempt);
       try {
         bill = await createData(BillModel, {
           billNo: candidate,

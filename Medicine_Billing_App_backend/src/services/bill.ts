@@ -2,6 +2,7 @@ import { Types } from "mongoose";
 import { Product } from "../database/models/product";
 import { CompanyModel } from "../database/models/company";
 import { MedicalStoreModel } from "../database/models/medicalStore";
+import { BillModel } from "../database/models/bill";
 import User from "../database/models/auth";
 import { GST_TYPE } from "../common";
 import { responseMessage } from "../helper";
@@ -96,6 +97,25 @@ export const getCompanyForBilling = async (companyId: string, medicalStoreId: st
   })
     .select("_id isActive")
     .lean<{ _id: Types.ObjectId; isActive?: boolean } | null>();
+
+const parseBillNo = (billNo: unknown): number => {
+  const value = String(billNo ?? "").trim();
+  if (!value) return 0;
+
+  if (/^\d+$/.test(value)) return parseInt(value, 10);
+
+  const lastNumericChunk = value.match(/\d+/g)?.pop();
+  return lastNumericChunk ? parseInt(lastNumericChunk, 10) : 0;
+};
+
+export const getNextBillNumberForStore = async (medicalStoreId: string) => {
+  const latestBill = await BillModel.findOne({ medicalStoreId })
+    .select("billNo")
+    .sort({ createdAt: -1 })
+    .lean<{ billNo?: string } | null>();
+
+  return parseBillNo(latestBill?.billNo) + 1;
+};
 
 export const buildCreateStockOps = (requiredQtyMap: Map<string, number>): StockBulkOp[] =>
   [...requiredQtyMap.entries()].map(([productId, requiredQty]) => ({

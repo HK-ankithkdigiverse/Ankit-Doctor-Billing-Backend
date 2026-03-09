@@ -2,6 +2,7 @@
 import { ensureCategoryCollectionIndexes } from '../models/category';
 import { ensureCompanyCollectionIndexes } from '../models/company';
 import { ensureMedicalStoreCollectionIndexes } from '../models/medicalStore';
+import { ensureBillCollectionIndexes } from '../models/bill';
 
 const dbUrl = process.env.DB_URL;
 
@@ -16,4 +17,5 @@ export const connectDatabase = async (): Promise<void> => {
     await ensureCategoryCollectionIndexes();
     await ensureCompanyCollectionIndexes();
     await ensureMedicalStoreCollectionIndexes();
+    await ensureBillCollectionIndexes();
 };
