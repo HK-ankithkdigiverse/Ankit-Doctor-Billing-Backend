@@ -10,6 +10,7 @@ import {buildBillTotalsSummary,buildCreateStockOps,buildQtyMap,buildUpdateStockO
 const BILL_USER_POPULATE_FIELDS = [
   "name",
   "email",
+  "phoneNumber",
   "signature",
   "role",
   "medicalStoreId",

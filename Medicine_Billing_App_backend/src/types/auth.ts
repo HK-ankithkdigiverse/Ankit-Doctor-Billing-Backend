@@ -3,6 +3,7 @@
 export interface AdminCreateUserBody {
   name: string;
   email: string;
+  phoneNumber?: string;
   password: string;
   signature?: string;
   role?: ROLE;

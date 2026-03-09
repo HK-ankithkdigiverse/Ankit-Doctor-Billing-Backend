@@ -50,6 +50,7 @@ export const adminCreateUser = async (req: AuthRequest, res: Response) => {
     const {
       name,
       email,
+      phoneNumber,
       password,
       signature,
       role,
@@ -93,6 +94,7 @@ export const adminCreateUser = async (req: AuthRequest, res: Response) => {
     const userPayload: any = {
       name: name.trim(),
       email: normalizedEmail,
+      phoneNumber: phoneNumber?.trim() || "",
       password: hashPassword,
       signature: signature?.trim() || "",
       role: role || ROLE.USER,
@@ -234,6 +236,7 @@ export const verifyOtp = async (req: Request, res: Response) => {
       user: {
         _id: user._id,
         role: user.role,
+        phoneNumber: user.phoneNumber || "",
         medicalStoreId: normalizedMedicalStoreId,
         medicalStore: userWithStore?.medicalStoreId || null,
       },

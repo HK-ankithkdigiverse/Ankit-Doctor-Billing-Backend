@@ -4,6 +4,7 @@ import {
   emailSchema,
   nameSchema,
   objectIdSchema,
+  phoneSchema,
 } from "./common";
 
 export const loginSchema = Joi.object({
@@ -34,6 +35,7 @@ export const changePasswordSchema = Joi.object({
 export const createUserSchema = Joi.object({
   name: nameSchema.required(),
   email: emailSchema.required(),
+  phoneNumber: phoneSchema.allow("").optional(),
   password: Joi.string().min(6).max(64).required(),
   signature: Joi.string().trim().allow("").optional(),
   role: Joi.string()
@@ -51,12 +53,14 @@ export const createUserSchema = Joi.object({
 export const updateProfileSchema = Joi.object({
   name: nameSchema.optional(),
   email: emailSchema.optional(),
+  phoneNumber: phoneSchema.allow("").optional(),
   signature: Joi.string().trim().allow("").optional(),
 }).min(1);
 
 export const updateUserSchema = Joi.object({
   name: nameSchema.optional(),
   email: emailSchema.optional(),
+  phoneNumber: phoneSchema.allow("").optional(),
   signature: Joi.string().trim().allow("").optional(),
   role: Joi.string()
     .valid(...Object.values(ROLE))

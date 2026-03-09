@@ -4,6 +4,7 @@ import { MODEL, ROLE } from "../../common";
 export interface IAuth extends Document {
   name: string;
   email: string;
+  phoneNumber?: string;
   password: string;
   medicalStoreId?: mongoose.Types.ObjectId;
   signature: string;
@@ -25,6 +26,11 @@ const userSchema = new mongoose.Schema<IAuth>(
       unique: true,
       lowercase: true,
       trim: true,
+    },
+    phoneNumber: {
+      type: String,
+      trim: true,
+      default: "",
     },
     password: {
       type: String,

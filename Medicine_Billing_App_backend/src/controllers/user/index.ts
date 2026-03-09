@@ -61,10 +61,11 @@ export const updateUser = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return sendUnauthorized(res, responseMessage.accessDenied);
 
-    const { name, email, signature } = req.body as Record<string, unknown>;
+    const { name, email, phoneNumber, signature } = req.body as Record<string, unknown>;
     const updatePayload: Record<string, unknown> = {};
     if (name !== undefined) updatePayload.name = name;
     if (email !== undefined) updatePayload.email = email;
+    if (phoneNumber !== undefined) updatePayload.phoneNumber = phoneNumber;
     if (signature !== undefined) updatePayload.signature = signature;
 
     const updatedUser = await updateData(
@@ -129,6 +130,7 @@ export const getAllUsers = async (req: AuthRequest, res: Response) => {
       criteria.$or = [
         { name: { $regex: search, $options: "si" } },
         { email: { $regex: search, $options: "si" } },
+        { phoneNumber: { $regex: search, $options: "si" } },
         { role: { $regex: search, $options: "si" } },
       ];
 
