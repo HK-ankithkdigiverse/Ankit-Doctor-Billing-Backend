@@ -42,3 +42,6 @@
 - GET /api/categories/:id
 - PUT /api/categories/:id
 - DELETE /api/categories/:id
+
+## Dashboard
+- GET /api/dashboard
